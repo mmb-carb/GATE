@@ -1,6 +1,6 @@
 
 from datetime import datetime
-from numpy import arcsin, array, cos, isnan, radians, sin, sqrt, sum, tan, pi
+from numpy import arcsin, array, cos, isnan, pi, radians, sin, sqrt, tan
 import numpy as np
 from netCDF4 import Dataset
 import os
@@ -14,7 +14,7 @@ import time
 DATES = ['2012-07-18']
 DATE_FORMAT = '%Y-%m-%d'
 BASE_YEAR = 2012
-REGIONS = range(1, 70)  # TODO: Can include OSC regions!
+REGIONS = range(1, 70)  # Can include OCS regions!
 #REGIONS = [1, 16, 19, 25, 38, 63]  # California's extrema
 ## GRID INFO
 GRID_DOT_FILE = 'input/grid/GRIDDOT2D.State_321x291'
@@ -1085,7 +1085,7 @@ class DictToNcfWriter(object):
                     grid = np.zeros((self.nlayers, self.nrows, self.ncols))
 
                     for eic, eic_data in scaled_emissions.iteritems():
-                        if poll not in eic_data[hour]: continue  # TODO: Is this right?  No NH3 at all???
+                        if poll not in eic_data[hour]: continue
 
                         # TOG and PM fractions are EIC-dependent
                         if int(eic) in self.gsref:
