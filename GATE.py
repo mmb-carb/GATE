@@ -45,7 +45,7 @@ VERSION = 'v0100'
 GRID_CROS_FILE = 'input/grid/GRIDCRO2D.California_4km_291x321'
 GSPRO_FILE = 'input/ncf/gspro.cmaq.saprc.31dec2015.all.csv'
 GSREF_FILE = 'input/ncf/gsref_28july2016_2012s.txt'
-WEIGHT_FILE = 'input/ncf/molecular.weights.txt'  # TODO: Is this the correct version? Bad name?
+WEIGHT_FILE = 'input/ncf/molecular.weights.txt'
 OUT_DIR = 'output/'
 SHOULD_ZIP = False
 
@@ -82,7 +82,7 @@ class GATE(object):
         self.emis_readr = EmissionsReader(config)
         self.temp_build = TemporalSurrogateBuilder(config)
         self.spat_build = SpatialSurrogateBuilder(config)
-        self.spat_scale = SpatialScaler(config)
+        self.emis_scale = EmissionsScaler(config)
         self.ncdf_write = DictToNcfWriter(config)
 
     def run(self):
@@ -90,10 +90,8 @@ class GATE(object):
         emis = self.emis_readr.read()
         temp_surrs = self.temp_build.build(emis.keys())
         spat_surrs = self.spat_build.build(emis.keys())
-        scaled_emis = self.spat_scale.scale(emis, spat_surrs, temp_surrs)
+        scaled_emis = self.emis_scale.scale(emis, spat_surrs, temp_surrs)
         self.ncdf_write.write(scaled_emis)
-
-        #self.spat_build.pprint_surrogate()
 
 
 class EmissionsReader(object):
@@ -514,7 +512,7 @@ class SpatialSurrogateBuilder(object):
             d[key] *= factor
 
     def pprint_surrogate(self):
-        ''' TODO: Temporary print method to inspect spatial surrogates
+        ''' Test print method to inspect spatial surrogates
         '''
         print('\nSpatial Surrogates (Just for testing purposes)\n')
         # color scheme
@@ -624,12 +622,6 @@ class SpatialSurrogateBuilder(object):
         total = float(sum(surrogate.values()))
         for cell in surrogate:
             surrogate[cell] /= total
-
-        new_surr = {}
-        for (z,x,y) in surrogate:
-            new_surr[(x,y,z)] = surrogate[(z,x,y)]  # TODO: This seems unnecessarily. Let's fix this at some point real soon.
-
-        surrogate = new_surr
 
     def _find_vertical_grid_cell(self, z_meters, x, y):
         '''Given the x and y grid cell, and the height (z)
@@ -923,8 +915,7 @@ class SpatialSurrogateBuilder(object):
         return airports
 
 
-# TODO: This name is no longer correct
-class SpatialScaler(object):
+class EmissionsScaler(object):
 
     def __init__(self, config):
         self.emis = {}
@@ -967,7 +958,6 @@ class SpatialScaler(object):
                                     self.emis[d][eic][hr][poll] = {}
                                 val0 = val * fraction_hr
 
-                                # TODO: Default if EIC or poll aren't there?
                                 for cell, fraction_cell in surrs[eic][poll].iteritems():
                                     if cell not in self.emis[d][eic][hr][poll]:
                                         self.emis[d][eic][hr][poll][cell] = 0.0
