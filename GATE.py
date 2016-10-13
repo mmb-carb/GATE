@@ -47,7 +47,7 @@ GSPRO_FILE = 'input/ncf/gspro.cmaq.saprc.31dec2015.all.csv'
 GSREF_FILE = 'input/ncf/gsref_28july2016_2012s.txt'
 WEIGHT_FILE = 'input/ncf/molecular.weights.txt'
 OUT_DIR = 'output/'
-SHOULD_ZIP = False
+SHOULD_ZIP = True
 
 
 def main():
@@ -68,6 +68,20 @@ def main():
     # parse command line
     a = 1
     while a < len(sys.argv):
+        flag = sys.argv[a]
+        if flag.startswith('-'):
+            flag = flag[1:].upper()
+            if flag is in config:
+                a += 1
+                value = sys.argv[a]
+                typ = type(config[flag])
+
+                if typ == list:
+                    sub_type = type(config[flag][0])
+                    config[flag] = [sub_type(v) for v in value.split(',')]
+                else:
+                    config[flag] = typ(value)
+
         a += 1
 
     # run program
