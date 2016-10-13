@@ -45,7 +45,7 @@ VERSION = 'v0100'
 GRID_CROS_FILE = 'input/grid/GRIDCRO2D.California_4km_291x321'
 GSPRO_FILE = 'input/ncf/gspro.cmaq.saprc.31dec2015.all.csv'
 GSREF_FILE = 'input/ncf/gsref_28july2016_2012s.txt'
-WEIGHT_FILE = 'input/ncf/molecular.weights.cmaq.mobile.txt'  # TODO: Is this the correct version? Bad name?
+WEIGHT_FILE = 'input/ncf/molecular.weights.txt'  # TODO: Is this the correct version? Bad name?
 OUT_DIR = 'output/'
 SHOULD_ZIP = False
 
