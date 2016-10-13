@@ -1069,7 +1069,7 @@ class DictToNcfWriter(object):
         nox_fraction = self.gspro['DEFNOX']['NOX']
         sox_fraction = self.gspro['SOX']['SOX']
 
-        for hour in xrange(24):  # TODO: There are a lot of zero hours here.
+        for hour in xrange(24):
             # adjust hr for DST
             if gmt_shift == '19':
                 hr = (hour + 1) % 24
@@ -1108,8 +1108,9 @@ class DictToNcfWriter(object):
 
                         self._add_grid_cells(grid, eic_data[hour][poll], fraction)  # TODO: Efficient?
 
+                    # write data block to file
                     rootgrp.variables[spec][hr,:,:,:] = grid
-                    # TODO: Skip because temporal profiles are zero at midnight?
+                    # last hour is the same as the first
                     if hr == 0:
                         rootgrp.variables[spec][24,:,:,:] = grid
 
@@ -1338,8 +1339,8 @@ class DictToNcfWriter(object):
         elif '250m' in grid_name:
             grid_size = '250m'
 
-        # TODO: "st" = state, "mv" = mobile, and "e14" = EIC-14 All can change
-        file_name = 'st_' + grid_size + '.mv.' + self.version + '..' + str(self.base_year) + '.' + \
+        # TODO: "st" = state, "ac" = aircraft, and "e14" = EIC-14 All can change
+        file_name = 'st_' + grid_size + '.ac.' + self.version + '..' + str(self.base_year) + '.' + \
                     yr + month + 'd' + day + '..e14..ncf'
 
         return os.path.join(out_dir, file_name)
