@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from numpy import arcsin, array, cos, isnan, pi, radians, sin, sqrt, tan
 import numpy as np
 from netCDF4 import Dataset
@@ -11,11 +11,12 @@ import time
 
 # USER CONFIGURABLES
 ## RUN INFO
-DATES = ['2012-07-18']  # TODO: This doesn't lead itself well to full-year date ranges
+DATES = ['2012-07-18']
+#DATES = ['2012-07-18', '...', '2012-07-20']
 DATE_FORMAT = '%Y-%m-%d'
 BASE_YEAR = 2012
-REGIONS = range(1, 70)  # Can include OCS regions!
-#REGIONS = [1, 16, 19, 25, 38, 63]  # California's extrema
+#REGIONS = range(1, 70)  # Can include OCS regions!
+REGIONS = [1, 16, 19, 25, 38, 63]  # California's extrema
 ## GRID INFO
 GRID_DOT_FILE = 'input/grid/GRIDDOT2D.State_321x291'
 MET_ZF_FILE = 'input/grid/METCRO3D_2012_01_extract_ZF_AVG'
@@ -92,7 +93,8 @@ def main():
 class GATE(object):
 
     def __init__(self, config):
-        # build model
+        ''' build  each step of the model '''
+        self._parse_dates(config)
         self.emis_readr = EmissionsReader(config)
         self.temp_build = TemporalSurrogateBuilder(config)
         self.spat_build = SpatialSurrogateBuilder(config)
@@ -100,6 +102,7 @@ class GATE(object):
         self.ncdf_write = DictToNcfWriter(config)
 
     def run(self):
+        ''' run each step of the model '''
         print('\nRunning GATE Model')
         emis = self.emis_readr.read()
         temp_surrs = self.temp_build.build(emis.keys())
@@ -107,6 +110,21 @@ class GATE(object):
         scaled_emis = self.emis_scale.scale(emis, spat_surrs, temp_surrs)
         self.ncdf_write.write(scaled_emis)
         # TODO: only keep one day of scaled emissions in memory at a time
+
+    def _parse_dates(self, config):
+        ''' Allow for implicit data ranges by using ellipsis:
+            DATES = ['2000-01-01', '...', '2000-12-31']
+        '''
+        if len(config['DATES']) == 3 and config['DATES'][1].strip() == '...':
+            fmt = config['DATE_FORMAT']
+            start = datetime.strptime(config['DATES'][0], fmt)
+            end = datetime.strptime(config['DATES'][2], fmt)
+            dates = [datetime.strftime(start, fmt)]
+            while start < end:
+                start += timedelta(days=1)
+                dates.append(datetime.strftime(start, fmt))
+
+        config['DATES'] = sorted(dates)
 
 
 class EmissionsReader(object):
