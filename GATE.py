@@ -116,7 +116,7 @@ class GATE(object):
             DATES = ['2000-01-01', '...', '2000-12-31']
         '''
         fmt = config['DATE_FORMAT']
-        
+
         if len(config['DATES']) == 3 and config['DATES'][1].strip() == '...':
             start = datetime.strptime(config['DATES'][0], fmt)
             end = datetime.strptime(config['DATES'][2], fmt)
@@ -1090,6 +1090,7 @@ class DictToNcfWriter(object):
             Old Emis format: region -> date -> hr -> EIC -> poll_grid
             New Emis format: EIC -> hr -> poll -> grid cell -> tons/day
         '''
+        # find species position by pollutant
         species = {}
         for group in self.groups:
             for i in xrange(len(np.atleast_1d(self.groups[group]['species']))):
@@ -1112,7 +1113,7 @@ class DictToNcfWriter(object):
                     ind = species[spec]['index']
 
                     # build default emissions grid, for the sum of all EICs
-                    grid = np.zeros((self.nlayers, self.nrows, self.ncols))
+                    grid = np.zeros((self.nlayers, self.nrows, self.ncols), dtype=np.float32)
 
                     for eic, eic_data in scaled_emissions.iteritems():
                         if poll not in eic_data[hour]: continue
@@ -1136,7 +1137,7 @@ class DictToNcfWriter(object):
                         elif poll == 'SOX':
                             fraction *= sox_fraction[ind]
 
-                        self._add_grid_cells(grid, eic_data[hour][poll], fraction)  # TODO: Efficient?
+                        self._add_grid_cells(grid, eic_data[hour][poll], fraction)
 
                     # write data block to file
                     rootgrp.variables[spec][hr,:,:,:] = grid
