@@ -11,7 +11,7 @@ import time
 
 # USER CONFIGURABLES
 ## RUN INFO
-DATES = ['2012-07-18']
+DATES = ['2012-07-18']  # TODO: This doesn't lead itself well to full-year date ranges
 DATE_FORMAT = '%Y-%m-%d'
 BASE_YEAR = 2012
 REGIONS = range(1, 70)  # Can include OCS regions!
@@ -71,7 +71,7 @@ def main():
         flag = sys.argv[a]
         if flag.startswith('-'):
             flag = flag[1:].upper()
-            if flag is in config:
+            if flag in config:
                 a += 1
                 value = sys.argv[a]
                 typ = type(config[flag])
@@ -106,6 +106,7 @@ class GATE(object):
         spat_surrs = self.spat_build.build(emis.keys())
         scaled_emis = self.emis_scale.scale(emis, spat_surrs, temp_surrs)
         self.ncdf_write.write(scaled_emis)
+        # TODO: only keep one day of scaled emissions in memory at a time
 
 
 class EmissionsReader(object):
@@ -468,20 +469,20 @@ class SpatialSurrogateBuilder(object):
                     self.surrogates[region][airport] = {}
 
                 for lat0, lon0, lat1, lon1 in airport_data['runways']:
-                    # TODO: For efficiency, find the grid cell of both ends of the runway and memoize?
-                    cell0 = tuple(self.find_grid_cell((0, lon0, lat0), region))
-                    cell1 = tuple(self.find_grid_cell((0, lon1, lat1), region))
+                    # memoize the grid cell of both ends of the runway
+                    cell0 = tuple(self.find_grid_cell((0.0, lon0, lat0), region))
+                    cell1 = tuple(self.find_grid_cell((0.0, lon1, lat1), region))
 
                     # landing
                     land = {}
                     for angle in self.landing_angles:
-                            self.add_dict(land, self._gen_surrogate_1runway(region, lat0, lon0, lat1, lon1, angle))
+                            self.add_dict(land, self._gen_surrogate_1runway(region, lat0, lon0, lat1, lon1, angle, cell0))
                     self.scale_dict(land, len(self.landing_angles))
 
                     # take-off
                     toff = {}
                     for angle in self.takoff_angles:
-                        self.add_dict(toff, self._gen_surrogate_1runway(region, lat1, lon1, lat0, lon0, angle))
+                        self.add_dict(toff, self._gen_surrogate_1runway(region, lat1, lon1, lat0, lon0, angle, cell1))
                     self.scale_dict(toff, len(self.takoff_angles))
 
                     # taxi-ing
@@ -585,7 +586,7 @@ class SpatialSurrogateBuilder(object):
         elif (self.lat_dot.shape[1] != self.ncols + 1) or (self.lon_dot.shape[1] != self.ncols + 1):
             raise ValueError('The grid file has the wrong number of rows: ' + self.corners_file)
 
-    def _gen_surrogate_1runway(self, region, lat0, lon0, lat1, lon1, angle):
+    def _gen_surrogate_1runway(self, region, lat0, lon0, lat1, lon1, angle, cell0=None):
         ''' generate a sparse-matrix 3D spatial surrogate
             for a single runway, going one direction
         '''
@@ -601,7 +602,10 @@ class SpatialSurrogateBuilder(object):
         p_end = self._find_end_point(p1, p2, self.abl_meters)
 
         # subset grid
-        start_bottom = self.find_grid_cell(p1, region)
+        if cell0:
+            start_bottom = np.array(cell0)
+        else:
+            start_bottom = self.find_grid_cell(p1, region)
         start_bottom[0] = 0
         end_top = self.find_grid_cell(p_end, region)
         end_top[0] = self.abl_meters
