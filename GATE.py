@@ -11,12 +11,10 @@ import time
 
 # USER CONFIGURABLES
 ## RUN INFO
-DATES = ['2012-07-18']
-#DATES = ['2012-07-18', '...', '2012-07-20']
+DATES = ['2012-07-18', '...', '2012-07-20']
 DATE_FORMAT = '%Y-%m-%d'
 BASE_YEAR = 2012
-#REGIONS = range(1, 70)  # Can include OCS regions!
-REGIONS = [1, 16, 19, 25, 38, 63]  # California's extrema
+REGIONS = range(1, 70)
 ## GRID INFO
 GRID_DOT_FILE = 'input/grid/GRIDDOT2D.State_321x291'
 MET_ZF_FILE = 'input/grid/METCRO3D_2012_01_extract_ZF_AVG'
@@ -95,6 +93,7 @@ class GATE(object):
     def __init__(self, config):
         ''' build  each step of the model '''
         self._parse_dates(config)
+        self.dates = config['DATES']
         self.emis_readr = EmissionsReader(config)
         self.temp_build = TemporalSurrogateBuilder(config)
         self.spat_build = SpatialSurrogateBuilder(config)
@@ -107,22 +106,26 @@ class GATE(object):
         emis = self.emis_readr.read()
         temp_surrs = self.temp_build.build(emis.keys())
         spat_surrs = self.spat_build.build(emis.keys())
-        scaled_emis = self.emis_scale.scale(emis, spat_surrs, temp_surrs)
-        self.ncdf_write.write(scaled_emis)
-        # TODO: only keep one day of scaled emissions in memory at a time
+        print('\tScaling Emissions & Writing Outputs')
+        for date in self.dates:
+            scaled_emis = self.emis_scale.scale(emis, spat_surrs, temp_surrs, date)
+            self.ncdf_write.write(scaled_emis, date)
 
     def _parse_dates(self, config):
         ''' Allow for implicit data ranges by using ellipsis:
             DATES = ['2000-01-01', '...', '2000-12-31']
         '''
+        fmt = config['DATE_FORMAT']
+        
         if len(config['DATES']) == 3 and config['DATES'][1].strip() == '...':
-            fmt = config['DATE_FORMAT']
             start = datetime.strptime(config['DATES'][0], fmt)
             end = datetime.strptime(config['DATES'][2], fmt)
             dates = [datetime.strftime(start, fmt)]
             while start < end:
                 start += timedelta(days=1)
                 dates.append(datetime.strftime(start, fmt))
+        else:
+            dates = config['DATES']
 
         config['DATES'] = sorted(dates)
 
@@ -956,7 +959,7 @@ class EmissionsScaler(object):
     def __init__(self, config):
         self.emis = {}
 
-    def scale(self, emis, spat_surrs, temp_surrs):
+    def scale(self, emis, spat_surrs, temp_surrs, date):
         ''' Create daily, gridded aircraft emissions
         Inputs:
             Emissions - multi-layer dictionary
@@ -969,35 +972,34 @@ class EmissionsScaler(object):
             Gridded Emissions - multi-layer dictionary
                 keys: date_string -> EIC -> hr -> poll -> grid cell -> tons/day
         '''
-        print('\tScaling Emissions to Hourly 3D')
+        print('\t\tScaling & Writing: ' + date)
 
         self.emis = {}
-        for d, temporal in temp_surrs.iteritems():
-            self.emis[d] = {}
-            for region, region_emis in emis.iteritems():
+        temporal = temp_surrs[date]
+        for region, region_emis in emis.iteritems():
 
-                for airport, airport_emis in region_emis.iteritems():
-                    surrs = spat_surrs[region][airport]
+            for airport, airport_emis in region_emis.iteritems():
+                surrs = spat_surrs[region][airport]
 
-                    diurnal = temporal[region][airport] if airport in temporal[region] else temporal[region][-1]
-                    for eic, polls in airport_emis.iteritems():
-                        if eic not in self.emis[d]:
-                            self.emis[d][eic] = dict((hr, {}) for hr in range(24))
+                diurnal = temporal[region][airport] if airport in temporal[region] else temporal[region][-1]
+                for eic, polls in airport_emis.iteritems():
+                    if eic not in self.emis:
+                        self.emis[eic] = dict((hr, {}) for hr in range(24))
 
-                        for hr in xrange(24):
-                            fraction_hr = diurnal[hr]
-                            if fraction_hr == 0.0:
-                                continue
+                    for hr in xrange(24):
+                        fraction_hr = diurnal[hr]
+                        if fraction_hr == 0.0:
+                            continue
 
-                            for poll, val in polls.iteritems():
-                                if poll not in self.emis[d][eic][hr]:
-                                    self.emis[d][eic][hr][poll] = {}
-                                val0 = val * fraction_hr
+                        for poll, val in polls.iteritems():
+                            if poll not in self.emis[eic][hr]:
+                                self.emis[eic][hr][poll] = {}
+                            val0 = val * fraction_hr
 
-                                for cell, fraction_cell in surrs[eic][poll].iteritems():
-                                    if cell not in self.emis[d][eic][hr][poll]:
-                                        self.emis[d][eic][hr][poll][cell] = 0.0
-                                    self.emis[d][eic][hr][poll][cell] += val0 * fraction_cell
+                            for cell, fraction_cell in surrs[eic][poll].iteritems():
+                                if cell not in self.emis[eic][hr][poll]:
+                                    self.emis[eic][hr][poll][cell] = 0.0
+                                self.emis[eic][hr][poll][cell] += val0 * fraction_cell
 
         return self.emis
 
@@ -1026,7 +1028,7 @@ class DictToNcfWriter(object):
         self.num_species = 0
         self.base_year = int(config['BASE_YEAR'])
         self.date_format = config['DATE_FORMAT']
-        self.dates = [datetime.strptime(d, self.date_format) for d in sorted(set(config['DATES']))]
+        self.dates = config['DATES']
         # default NetCDF header for on-road emissions on California's 4km modeling domain
         self.header = {'IOAPI_VERSION': "$Id: @(#) ioapi library version 3.1 $" + " "*43,
                        'EXEC_ID': "????????????????" + " "*64,
@@ -1059,31 +1061,23 @@ class DictToNcfWriter(object):
         self._load_gsref()
         self._load_gspro()
 
-    def write(self, emis):
-        ''' create CMAQ-ready NetCDF from results
-        '''
-        print('\tWriting Output NetCDF Files')
-        for d in self.dates:
-            d_str = datetime.strftime(d, self.date_format)
-            print('\t\tWriting: ' + d_str)
-            self._write_one_ncf(d, emis[d_str], d==self.dates[-1])
-
-    def _write_one_ncf(self, date, emis, is_last_date):
+    def write(self, emis, date):
         ''' Write a CMAQ-ready NetCDF file for a single day
         '''
         # get Julian date
-        jdate = int(str(date.year) + datetime(self.base_year, date.month, date.day).strftime('%j'))
+        dt = datetime.strptime(date, self.date_format)
+        jdate = int(str(dt.year) + datetime(self.base_year, dt.month, dt.day).strftime('%j'))
 
         # create empty netcdf file (including file path)
-        out_path = self._build_state_file_path(date)
-        rootgrp, gmt_shift = self._create_netcdf(out_path, date, jdate)
+        out_path = self._build_state_file_path(dt)
+        rootgrp, gmt_shift = self._create_netcdf(out_path, dt, jdate)
 
         # fill netcdf file with data
         self._fill_grid(emis, date, rootgrp, gmt_shift)
 
         # compress output file
         if self.should_zip:
-            if is_last_date:
+            if date == self.dates[-1]:
                 os.system('gzip -1 ' + out_path)
             else:
                 os.system('gzip -1 ' + out_path + ' &')
