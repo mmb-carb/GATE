@@ -100,6 +100,8 @@ class GATE(object):
         self.emis_scale = EmissionsScaler(config)
         self.ncdf_write = DictToNcfWriter(config)
 
+    # TODO: Can I parallelize these jobs by date?
+
     def run(self):
         ''' run each step of the model '''
         print('\nRunning GATE Model')
@@ -480,6 +482,9 @@ class SpatialSurrogateBuilder(object):
         if regions:
             self.regions = regions
 
+        land_scalar = 1.0 / float(len(self.landing_angles))
+        toff_scalar = 1.0 / float(len(self.takoff_angles))
+
         # build spatial surrogates
         for region in self.regions:
             if region not in self.airports:
@@ -498,13 +503,13 @@ class SpatialSurrogateBuilder(object):
                     land = {}
                     for angle in self.landing_angles:
                             self.add_dict(land, self._gen_surrogate_1runway(region, lat0, lon0, lat1, lon1, angle, cell0))
-                    self.scale_dict(land, len(self.landing_angles))
+                    self.scale_dict(land, land_scalar)
 
                     # take-off
                     toff = {}
                     for angle in self.takoff_angles:
                         self.add_dict(toff, self._gen_surrogate_1runway(region, lat1, lon1, lat0, lon0, angle, cell1))
-                    self.scale_dict(toff, len(self.takoff_angles))
+                    self.scale_dict(toff, toff_scalar)
 
                     # taxi-ing
                     taxi = {cell0: 0.5, cell1: 0.5}
@@ -558,9 +563,13 @@ class SpatialSurrogateBuilder(object):
 
         # print with colors
         for region, airports in self.surrogates.iteritems():
+            if region != 59: continue
             for airport, eic_data in airports.iteritems():
+                if airport != 'LAX': continue
                 for eic, poll_data in eic_data.iteritems():
+                    if eic != 81080011400000: continue
                     for poll, surr_data in poll_data.iteritems():
+                        if poll not in ['CO', 'NOX', 'PM']: continue
                         s = {}
                         for key,value in surr_data.iteritems():
                             for i in xrange(len(COLOR_SCHEME)):
@@ -1069,7 +1078,7 @@ class DictToNcfWriter(object):
         jdate = int(str(dt.year) + datetime(self.base_year, dt.month, dt.day).strftime('%j'))
 
         # create empty netcdf file (including file path)
-        out_path = self._build_state_file_path(dt)
+        out_path = self._build_custom_file_path(dt)
         rootgrp, gmt_shift = self._create_netcdf(out_path, dt, jdate)
 
         # fill netcdf file with data
@@ -1344,12 +1353,12 @@ class DictToNcfWriter(object):
 
         f.close()
 
-    def _build_state_file_path(self, date):
+    def _build_custom_file_path(self, date):
         """ Build output file directory and path for a daily, multi-region NetCDF file.
             NOTE: This method uses an extremely detailed file naming convention.
                   For example:
-            st_4k.mv.v0938..2012.203107d18..e14..ncf
-            [statewide]_[4km grid].[mobile source].[version 938]..[base year 2012].
+            st_4k.ac.v0938..2012.203107d18..e14..ncf
+            [statewide]_[4km grid].[aircraft].[version 938]..[base year 2012].
             [model year 2031][month 7]d[day 18]..[EIC 14 categories]..ncf
         """
         yr, month, day = date.strftime(self.date_format).split('-')
