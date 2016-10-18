@@ -1,5 +1,6 @@
 
 from datetime import datetime, timedelta
+import multiprocessing
 from numpy import arcsin, array, cos, isnan, pi, radians, sin, sqrt, tan
 import numpy as np
 from netCDF4 import Dataset
@@ -15,6 +16,7 @@ DATES = ['2012-07-18', '...', '2012-07-20']
 DATE_FORMAT = '%Y-%m-%d'
 BASE_YEAR = 2012
 REGIONS = range(1, 70)
+NUM_PROCS = 2
 ## GRID INFO
 GRID_DOT_FILE = 'input/grid/GRIDDOT2D.State_321x291'
 MET_ZF_FILE = 'input/grid/METCRO3D_2012_01_extract_ZF_AVG'
@@ -52,9 +54,9 @@ SHOULD_ZIP = True
 def main():
     # parse configurables
     config = {'DATES': DATES, 'DATE_FORMAT': DATE_FORMAT, 'BASE_YEAR': BASE_YEAR,
-              'REGIONS': REGIONS, 'GRID_DOT_FILE': GRID_DOT_FILE, 'MET_ZF_FILE': MET_ZF_FILE,
-              'NROWS': NROWS, 'NCOLS': NCOLS, 'NLAYERS': NLAYERS, 'ABL_METERS': ABL_METERS,
-              'REGION_BOX_FILE': REGION_BOX_FILE,
+              'NUM_PROCS': NUM_PROCS, 'REGIONS': REGIONS, 'GRID_DOT_FILE': GRID_DOT_FILE,
+              'MET_ZF_FILE': MET_ZF_FILE, 'NROWS': NROWS, 'NCOLS': NCOLS, 'NLAYERS': NLAYERS,
+              'ABL_METERS': ABL_METERS, 'REGION_BOX_FILE': REGION_BOX_FILE,
               'TAKEOFF_ANGLES': TAKEOFF_ANGLES, 'LAND_ANGLES': LAND_ANGLES,
               'RUNWAY_FILE': RUNWAY_FILE, 'FLIGHT_FRACTS_FILE': FLIGHT_FRACTS_FILE,
               'EICS': EICS, 'AREA_FILES': AREA_FILES, 'POINT_FILES': POINT_FILES,
@@ -94,50 +96,17 @@ class GATE(object):
         ''' build  each step of the model '''
         self._parse_dates(config)
         self.dates = config['DATES']
+        self.num_procs = config['NUM_PROCS']
         self.emis_readr = EmissionsReader(config)
         self.temp_build = TemporalSurrogateBuilder(config)
         self.spat_build = SpatialSurrogateBuilder(config)
         self.emis_scale = EmissionsScaler(config)
         self.ncdf_write = DictToNcfWriter(config)
 
-    def run_OLD(self):
-        ''' run each step of the model '''
-        print('\nRunning GATE Model')
-        emis = self.emis_readr.read()
-        temp_surrs = self.temp_build.build(emis.keys())
-        spat_surrs = self.spat_build.build(emis.keys())
-        print('\tScaling Emissions & Writing Outputs')
-        for date in self.dates:
-            scaled_emis = self.emis_scale.scale(emis, spat_surrs, temp_surrs, date)
-            self.ncdf_write.write(scaled_emis, date)
-
-    def run_threading(self):
-        ''' run each step of the model
-            break the work into THREE threads
-        '''
-        # TODO: Should I be using multiprocessing, not multiple threads?  ...probably.
-        # TODO: Does all this threading nonsense mean I have to gzip passively, instead of catching the last one?
-        import threading
-
-        print('\nRunning GATE Model')
-        emis = self.emis_readr.read()
-        temp_surrs = self.temp_build.build(emis.keys())
-        spat_surrs = self.spat_build.build(emis.keys())
-        print('\tScaling Emissions & Writing Outputs')
-
-        threads = []
-        for date_group in self.chunk_list(self.dates, 3):  # TODO: Three is a stupid default.
-            t = threading.Thread(target=self._scale_and_write_dates, args=(date_group, emis, spat_surrs, temp_surrs))
-            threads.append(t)
-            t.start()
-
     def run(self):
         ''' run each step of the model
-            break the work into THREE threads
+            break the final scaling and output steps into multiple processes
         '''
-        # TODO: Does all this threading nonsense mean I have to gzip passively, instead of catching the last one?
-        import multiprocessing
-
         print('\nRunning GATE Model')
         emis = self.emis_readr.read()
         temp_surrs = self.temp_build.build(emis.keys())
@@ -145,13 +114,14 @@ class GATE(object):
         print('\tScaling Emissions & Writing Outputs')
 
         jobs = []
-        for date_group in self.chunk_list(self.dates, 10):  # TODO: Three is a stupid default.
+        for date_group in self.chunk_list(self.dates, self.num_procs):
             j = multiprocessing.Process(target=self._scale_and_write_dates, args=(date_group, emis, spat_surrs, temp_surrs))
             jobs.append(j)
             j.start()
 
     def _scale_and_write_dates(self, dates, emis, spat_surrs, temp_surrs):
-        '''
+        ''' This is a single-process helper function for the multi-process program.
+            Scale emissions for a single date and write them to a CMAQ-ready NetCDF file.
         '''
         for date in dates:
             scaled_emis = self.emis_scale.scale(emis, spat_surrs, temp_surrs, date)
@@ -1145,10 +1115,7 @@ class DictToNcfWriter(object):
 
         # compress output file
         if self.should_zip:
-            if date == self.dates[-1]:
-                os.system('gzip -1 ' + out_path)
-            else:
-                os.system('gzip -1 ' + out_path + ' &')
+            os.system('gzip -1 ' + out_path + ' &')
 
     def _fill_grid(self, scaled_emissions, date, ncf, gmt_shift):
         ''' Fill the entire modeling domain with a 3D grid for each pollutant.
