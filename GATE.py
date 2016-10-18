@@ -100,9 +100,7 @@ class GATE(object):
         self.emis_scale = EmissionsScaler(config)
         self.ncdf_write = DictToNcfWriter(config)
 
-    # TODO: Can I parallelize these jobs by date?
-
-    def run(self):
+    def run_OLD(self):
         ''' run each step of the model '''
         print('\nRunning GATE Model')
         emis = self.emis_readr.read()
@@ -110,6 +108,52 @@ class GATE(object):
         spat_surrs = self.spat_build.build(emis.keys())
         print('\tScaling Emissions & Writing Outputs')
         for date in self.dates:
+            scaled_emis = self.emis_scale.scale(emis, spat_surrs, temp_surrs, date)
+            self.ncdf_write.write(scaled_emis, date)
+
+    def run_threading(self):
+        ''' run each step of the model
+            break the work into THREE threads
+        '''
+        # TODO: Should I be using multiprocessing, not multiple threads?  ...probably.
+        # TODO: Does all this threading nonsense mean I have to gzip passively, instead of catching the last one?
+        import threading
+
+        print('\nRunning GATE Model')
+        emis = self.emis_readr.read()
+        temp_surrs = self.temp_build.build(emis.keys())
+        spat_surrs = self.spat_build.build(emis.keys())
+        print('\tScaling Emissions & Writing Outputs')
+
+        threads = []
+        for date_group in self.chunk_list(self.dates, 3):  # TODO: Three is a stupid default.
+            t = threading.Thread(target=self._scale_and_write_dates, args=(date_group, emis, spat_surrs, temp_surrs))
+            threads.append(t)
+            t.start()
+
+    def run(self):
+        ''' run each step of the model
+            break the work into THREE threads
+        '''
+        # TODO: Does all this threading nonsense mean I have to gzip passively, instead of catching the last one?
+        import multiprocessing
+
+        print('\nRunning GATE Model')
+        emis = self.emis_readr.read()
+        temp_surrs = self.temp_build.build(emis.keys())
+        spat_surrs = self.spat_build.build(emis.keys())
+        print('\tScaling Emissions & Writing Outputs')
+
+        jobs = []
+        for date_group in self.chunk_list(self.dates, 10):  # TODO: Three is a stupid default.
+            j = multiprocessing.Process(target=self._scale_and_write_dates, args=(date_group, emis, spat_surrs, temp_surrs))
+            jobs.append(j)
+            j.start()
+
+    def _scale_and_write_dates(self, dates, emis, spat_surrs, temp_surrs):
+        '''
+        '''
+        for date in dates:
             scaled_emis = self.emis_scale.scale(emis, spat_surrs, temp_surrs, date)
             self.ncdf_write.write(scaled_emis, date)
 
@@ -130,6 +174,21 @@ class GATE(object):
             dates = config['DATES']
 
         config['DATES'] = sorted(dates)
+
+    @staticmethod
+    def chunk_list(seq, num):
+        avg = len(seq) / float(num)
+        out = []
+        last = 0.0
+
+        while last < len(seq):
+            new_out = seq[int(last):int(last + avg)]
+            last += avg
+            if not len(new_out):
+                continue
+            out.append(new_out)
+
+        return out
 
 
 class EmissionsReader(object):
@@ -966,7 +1025,7 @@ class SpatialSurrogateBuilder(object):
 class EmissionsScaler(object):
 
     def __init__(self, config):
-        self.emis = {}
+        pass
 
     def scale(self, emis, spat_surrs, temp_surrs, date):
         ''' Create daily, gridded aircraft emissions
@@ -983,7 +1042,7 @@ class EmissionsScaler(object):
         '''
         print('\t\tScaling & Writing: ' + date)
 
-        self.emis = {}
+        scaled_emis = {}
         temporal = temp_surrs[date]
         for region, region_emis in emis.iteritems():
 
@@ -992,8 +1051,8 @@ class EmissionsScaler(object):
 
                 diurnal = temporal[region][airport] if airport in temporal[region] else temporal[region][-1]
                 for eic, polls in airport_emis.iteritems():
-                    if eic not in self.emis:
-                        self.emis[eic] = dict((hr, {}) for hr in range(24))
+                    if eic not in scaled_emis:
+                        scaled_emis[eic] = dict((hr, {}) for hr in range(24))
 
                     for hr in xrange(24):
                         fraction_hr = diurnal[hr]
@@ -1001,16 +1060,16 @@ class EmissionsScaler(object):
                             continue
 
                         for poll, val in polls.iteritems():
-                            if poll not in self.emis[eic][hr]:
-                                self.emis[eic][hr][poll] = {}
+                            if poll not in scaled_emis[eic][hr]:
+                                scaled_emis[eic][hr][poll] = {}
                             val0 = val * fraction_hr
 
                             for cell, fraction_cell in surrs[eic][poll].iteritems():
-                                if cell not in self.emis[eic][hr][poll]:
-                                    self.emis[eic][hr][poll][cell] = 0.0
-                                self.emis[eic][hr][poll][cell] += val0 * fraction_cell
+                                if cell not in scaled_emis[eic][hr][poll]:
+                                    scaled_emis[eic][hr][poll][cell] = 0.0
+                                scaled_emis[eic][hr][poll][cell] += val0 * fraction_cell
 
-        return self.emis
+        return scaled_emis
 
 
 class DictToNcfWriter(object):
@@ -1079,10 +1138,10 @@ class DictToNcfWriter(object):
 
         # create empty netcdf file (including file path)
         out_path = self._build_custom_file_path(dt)
-        rootgrp, gmt_shift = self._create_netcdf(out_path, dt, jdate)
+        ncf, gmt_shift = self._create_netcdf(out_path, dt, jdate)
 
         # fill netcdf file with data
-        self._fill_grid(emis, date, rootgrp, gmt_shift)
+        self._fill_grid(emis, date, ncf, gmt_shift)
 
         # compress output file
         if self.should_zip:
@@ -1091,7 +1150,7 @@ class DictToNcfWriter(object):
             else:
                 os.system('gzip -1 ' + out_path + ' &')
 
-    def _fill_grid(self, scaled_emissions, date, rootgrp, gmt_shift):
+    def _fill_grid(self, scaled_emissions, date, ncf, gmt_shift):
         ''' Fill the entire modeling domain with a 3D grid for each pollutant.
             Fill the emissions values in each grid cell, for each polluant.
             Create a separate grid set for each date.
@@ -1149,12 +1208,12 @@ class DictToNcfWriter(object):
                         self._add_grid_cells(grid, eic_data[hour][poll], fraction)
 
                     # write data block to file
-                    rootgrp.variables[spec][hr,:,:,:] = grid
+                    ncf.variables[spec][hr,:,:,:] = grid
                     # last hour is the same as the first
                     if hr == 0:
-                        rootgrp.variables[spec][24,:,:,:] = grid
+                        ncf.variables[spec][24,:,:,:] = grid
 
-        rootgrp.close()
+        ncf.close()
 
     def _add_grid_cells(self, grid, grid_cells, fraction):
         ''' Given a dictionary of (layer, row, col) -> float,
@@ -1174,16 +1233,16 @@ class DictToNcfWriter(object):
         current_time = int(time.strftime("%H%M%S"))
 
         # create and outline NetCDF file
-        rootgrp = Dataset(out_path, 'w', format='NETCDF3_CLASSIC')
-        TSTEP = rootgrp.createDimension('TSTEP', None)
-        DATE_TIME = rootgrp.createDimension('DATE-TIME', 2)
-        LAY = rootgrp.createDimension('LAY', self.nlayers)
-        VAR = rootgrp.createDimension('VAR', self.num_species)  # number of variables/species
-        ROW = rootgrp.createDimension('ROW', self.nrows)        # Domain: number of rows
-        COL = rootgrp.createDimension('COL', self.ncols)        # Domain: number of columns
+        ncf = Dataset(out_path, 'w', format='NETCDF3_CLASSIC')
+        TSTEP = ncf.createDimension('TSTEP', None)
+        DATE_TIME = ncf.createDimension('DATE-TIME', 2)
+        LAY = ncf.createDimension('LAY', self.nlayers)
+        VAR = ncf.createDimension('VAR', self.num_species)  # number of variables/species
+        ROW = ncf.createDimension('ROW', self.nrows)        # Domain: number of rows
+        COL = ncf.createDimension('COL', self.ncols)        # Domain: number of columns
 
         # define TFLAG Variable
-        TFLAG = rootgrp.createVariable('TFLAG', 'i4', ('TSTEP', 'VAR', 'DATE-TIME',), zlib=False)
+        TFLAG = ncf.createVariable('TFLAG', 'i4', ('TSTEP', 'VAR', 'DATE-TIME',), zlib=False)
         TFLAG.units = '<YYYYDDD,HHMMSS>'
         TFLAG.long_name = 'TFLAG'
         TFLAG.var_desc = 'Timestep-valid flags:  (1) YYYYDDD or (2) HHMMSS'
@@ -1192,46 +1251,46 @@ class DictToNcfWriter(object):
         varl = ''
         for group in self.groups:
             for species in self.groups[group]['species']:
-                rootgrp.createVariable(species, 'f4', ('TSTEP', 'LAY', 'ROW', 'COL'), zlib=False)
-                rootgrp.variables[species].long_name = species
-                rootgrp.variables[species].units = self.groups[group]['units']
-                rootgrp.variables[species].var_desc = 'emissions'
+                ncf.createVariable(species, 'f4', ('TSTEP', 'LAY', 'ROW', 'COL'), zlib=False)
+                ncf.variables[species].long_name = species
+                ncf.variables[species].units = self.groups[group]['units']
+                ncf.variables[species].var_desc = 'emissions'
                 varl += species.ljust(16)
 
         # global attributes
-        rootgrp.IOAPI_VERSION = self.header['IOAPI_VERSION']
-        rootgrp.EXEC_ID = self.header['EXEC_ID']
-        rootgrp.FTYPE = self.header['FTYPE']    # file type ID
-        rootgrp.CDATE = current_date            # current date  e.g. 2013137
-        rootgrp.CTIME = current_time            # current time  e.g. 50126
-        rootgrp.WDATE = current_date            # current date  e.g. 2013137
-        rootgrp.WTIME = current_time            # current time  e.g. 50126
-        rootgrp.SDATE = jdate                   # scenario date e.g. 2010091
-        rootgrp.STIME = self.header['STIME']    # start time    e.g. 80000 (for GMT)
-        rootgrp.TSTEP = self.header['TSTEP']    # time step     e.g. 10000 (1 hour)
-        rootgrp.NTHIK = self.header['NTHIK']    # Domain: perimeter thickness (boundary files only)
-        rootgrp.NCOLS = self.header['NCOLS']    # Domain: number of columns in modeling domain
-        rootgrp.NROWS = self.header['NROWS']    # Domain: number of rows in modeling domain
-        rootgrp.NLAYS = self.header['NLAYS']    # Domain: number of vertical layers
-        rootgrp.NVARS = self.num_species        # number of variables/species
-        rootgrp.GDTYP = self.header['GDTYP']    # Domain: grid type ID (lat-lon, UTM, RADM, etc...)
-        rootgrp.P_ALP = self.header['P_ALP']    # Projection: alpha
-        rootgrp.P_BET = self.header['P_BET']    # Projection: betha
-        rootgrp.P_GAM = self.header['P_GAM']    # Projection: gamma
-        rootgrp.XCENT = self.header['XCENT']    # Projection: x centroid longitude
-        rootgrp.YCENT = self.header['YCENT']    # Projection: y centroid latitude
-        rootgrp.XORIG = self.header['XORIG']    # Domain: -684000 for CA_4k, -84000 for SC_4k
-        rootgrp.YORIG = self.header['YORIG']    # Domain: -564000 for CA_4k, -552000 for SC_4k
-        rootgrp.XCELL = self.header['XCELL']    # Domain: x cell width in meters
-        rootgrp.YCELL = self.header['YCELL']    # Domain: y cell width in meters
-        rootgrp.VGTYP = self.header['VGTYP']    # Domain: grid type ID (lat-lon, UTM, RADM, etc...)
-        rootgrp.VGTOP = self.header['VGTOP']    # Domain: Top Vertical layer at 10km
-        rootgrp.VGLVLS = self.header['VGLVLS']  # Domain: Vertical layer locations
-        rootgrp.GDNAM = self.header['GDNAM']
-        rootgrp.UPNAM = self.header['UPNAM']
-        rootgrp.FILEDESC = self.header['FILEDESC']
-        rootgrp.HISTORY = self.header['HISTORY']
-        rootgrp.setncattr('VAR-LIST', varl)     # use this command b/c of python not liking hyphen '-'
+        ncf.IOAPI_VERSION = self.header['IOAPI_VERSION']
+        ncf.EXEC_ID = self.header['EXEC_ID']
+        ncf.FTYPE = self.header['FTYPE']    # file type ID
+        ncf.CDATE = current_date            # current date  e.g. 2013137
+        ncf.CTIME = current_time            # current time  e.g. 50126
+        ncf.WDATE = current_date            # current date  e.g. 2013137
+        ncf.WTIME = current_time            # current time  e.g. 50126
+        ncf.SDATE = jdate                   # scenario date e.g. 2010091
+        ncf.STIME = self.header['STIME']    # start time    e.g. 80000 (for GMT)
+        ncf.TSTEP = self.header['TSTEP']    # time step     e.g. 10000 (1 hour)
+        ncf.NTHIK = self.header['NTHIK']    # Domain: perimeter thickness (boundary files only)
+        ncf.NCOLS = self.header['NCOLS']    # Domain: number of columns in modeling domain
+        ncf.NROWS = self.header['NROWS']    # Domain: number of rows in modeling domain
+        ncf.NLAYS = self.header['NLAYS']    # Domain: number of vertical layers
+        ncf.NVARS = self.num_species        # number of variables/species
+        ncf.GDTYP = self.header['GDTYP']    # Domain: grid type ID (lat-lon, UTM, RADM, etc...)
+        ncf.P_ALP = self.header['P_ALP']    # Projection: alpha
+        ncf.P_BET = self.header['P_BET']    # Projection: betha
+        ncf.P_GAM = self.header['P_GAM']    # Projection: gamma
+        ncf.XCENT = self.header['XCENT']    # Projection: x centroid longitude
+        ncf.YCENT = self.header['YCENT']    # Projection: y centroid latitude
+        ncf.XORIG = self.header['XORIG']    # Domain: -684000 for CA_4k, -84000 for SC_4k
+        ncf.YORIG = self.header['YORIG']    # Domain: -564000 for CA_4k, -552000 for SC_4k
+        ncf.XCELL = self.header['XCELL']    # Domain: x cell width in meters
+        ncf.YCELL = self.header['YCELL']    # Domain: y cell width in meters
+        ncf.VGTYP = self.header['VGTYP']    # Domain: grid type ID (lat-lon, UTM, RADM, etc...)
+        ncf.VGTOP = self.header['VGTOP']    # Domain: Top Vertical layer at 10km
+        ncf.VGLVLS = self.header['VGLVLS']  # Domain: Vertical layer locations
+        ncf.GDNAM = self.header['GDNAM']
+        ncf.UPNAM = self.header['UPNAM']
+        ncf.FILEDESC = self.header['FILEDESC']
+        ncf.HISTORY = self.header['HISTORY']
+        ncf.setncattr('VAR-LIST', varl)     # use this command b/c of python not liking hyphen '-'
 
         # seconds since epoch
         secs = time.mktime(time.strptime("%s 12" % jdate, "%Y%j %H"))
@@ -1245,9 +1304,9 @@ class DictToNcfWriter(object):
             a_date,ghr = map(int, gdh.split())
             tflag[hr,:,0] = tflag[hr,:,0] * a_date
             tflag[hr,:,1] = tflag[hr,:,1] * ghr
-        rootgrp.variables['TFLAG'][:] = tflag
+        ncf.variables['TFLAG'][:] = tflag
 
-        return rootgrp, gmt_shift
+        return ncf, gmt_shift
 
     def _load_gsref(self):
         ''' load the gsref file
