@@ -92,6 +92,8 @@ def main():
 
 class GATE(object):
 
+    GATE_VERSION = '0.2.0'
+
     def __init__(self, config):
         ''' build  each step of the model '''
         self._parse_dates(config)
@@ -107,7 +109,7 @@ class GATE(object):
         ''' run each step of the model
             break the final scaling and output steps into multiple processes
         '''
-        print('\nRunning GATE Model')
+        print('\nRunning GATE Model v' + self.GATE_VERSION)
         emis = self.emis_readr.read()
         temp_surrs = self.temp_build.build(emis.keys())
         spat_surrs = self.spat_build.build(emis.keys())
@@ -1381,8 +1383,8 @@ class DictToNcfWriter(object):
 
     def _build_custom_file_path(self, date):
         """ Build output file directory and path for a daily, multi-region NetCDF file.
-            NOTE: This method uses an extremely detailed file naming convention.
-                  For example:
+            NOTE: This method uses an extremely detailed file naming convention,
+                  designed specifically for the CARB. For example:
             st_4k.ac.v0938..2012.203107d18..e14..ncf
             [statewide]_[4km grid].[aircraft].[version 938]..[base year 2012].
             [model year 2031][month 7]d[day 18]..[EIC 14 categories]..ncf
@@ -1405,7 +1407,7 @@ class DictToNcfWriter(object):
         elif '250m' in grid_name:
             grid_size = '250m'
 
-        # TODO: "st" = state, "ac" = aircraft, and "e14" = EIC-14 All can change
+        # TODO: "st" = state, "sc" = South Coast, "us" = United States
         file_name = 'st_' + grid_size + '.ac.' + self.version + '..' + str(self.base_year) + '.' + \
                     yr + month + 'd' + day + '..e14..ncf'
 
