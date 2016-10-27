@@ -18,8 +18,8 @@ BASE_YEAR = 2012
 REGIONS = range(1, 70)
 NUM_PROCS = 2
 ## GRID INFO
-GRID_DOT_FILE = 'input/grid/GRIDDOT2D.State_321x291'
-MET_ZF_FILE = 'input/grid/METCRO3D_2012_01_extract_ZF_AVG'
+GRID_DOT_FILE = 'input/grid/GRIDDOT2D.Cali_4km_321x291'
+MET_ZF_FILE = 'input/grid/METCRO3D.Cali_4km_321x291_2012_01_ZF'
 NCOLS = 321
 NROWS = 291
 NLAYERS = 18
@@ -38,12 +38,12 @@ POINT_FILES = ['input/emis/st_4k.ps.v0001.810.2012.2012.rf2095_snp20160627.SMOKE
 GAI_CODES_FILE = 'input/default/gai_codes.py'
 FACILITY_ID_FILE = 'input/default/facility_ids.py'
 ## TEMPORAL INFO
-SMOKE_AREA_FILE = 'input/temporal/ATREF_pro2012_snp20160627_smk4.csv'  # TODO: Remove?
+#### TODO: Perhaps we can remove all of these, since we have real data to work with.
+SMOKE_AREA_FILE = 'input/temporal/ATREF_pro2012_snp20160627_smk4.csv'
 SMOKE_PNT_FILE = 'input/temporal/PTREF_pro2012_snp20160627_smk4.csv'
 SMOKE_PROF_FILE = 'input/temporal/ARPTPRO_pro2012_snp20160627_smk3_smk4.csv'
 ## CMAQ OUTPUT INFO
 VERSION = 'v0100'
-GRID_CROS_FILE = 'input/grid/GRIDCRO2D.California_4km_291x321'
 GSPRO_FILE = 'input/ncf/gspro.cmaq.saprc.31dec2015.all.csv'
 GSREF_FILE = 'input/ncf/gsref_28july2016_2012s.txt'
 WEIGHT_FILE = 'input/ncf/molecular.weights.txt'
@@ -63,8 +63,8 @@ def main():
               'GAI_CODES_FILE': GAI_CODES_FILE, 'FACILITY_ID_FILE': FACILITY_ID_FILE,
               'SMOKE_AREA_FILE': SMOKE_AREA_FILE, 'SMOKE_PNT_FILE': SMOKE_PNT_FILE,
               'SMOKE_PROF_FILE': SMOKE_PROF_FILE, 'VERSION': VERSION,
-              'GRID_CROS_FILE': GRID_CROS_FILE, 'GSPRO_FILE': GSPRO_FILE, 'GSREF_FILE': GSREF_FILE,
-              'WEIGHT_FILE': WEIGHT_FILE, 'OUT_DIR': OUT_DIR, 'SHOULD_ZIP': SHOULD_ZIP}
+              'GSPRO_FILE': GSPRO_FILE, 'GSREF_FILE': GSREF_FILE, 'WEIGHT_FILE': WEIGHT_FILE,
+              'OUT_DIR': OUT_DIR, 'SHOULD_ZIP': SHOULD_ZIP}
 
     # parse command line
     a = 1
@@ -379,11 +379,10 @@ class TemporalSurrogateBuilder(object):
     def _default_profiles(self):
         ''' Build the default temporal profiles for all regions.
             (BoTS = Beauro of Transportation Statistics)
-            Monthly: found using BoTS 2015 California flight data
-            Weekly:  found using BoTS 2015 California flight data
-            Diurnal: flat between 6AM and 11PM (guessing: hard to find real data by hour)
+            Monthly: found using BoTS 2002-2015 California flight data
+            Weekly:  found using BoTS 2002-2015 California flight data
+            Diurnal: flat between 5AM and 11PM (hard to find real data by hour)
         '''
-        # TODO: Create profiles using 2002-2015, not just 2015!
         profiles = {}
 
         for r in self.regions:
@@ -392,17 +391,17 @@ class TemporalSurrogateBuilder(object):
             profiles[r][-1] = {}
 
             # values for default airports
-            profiles[r][-1]['monthly'] = [0.940019, 0.940760, 0.983350, 0.997757, 1.000840, 1.054673,
-                                          1.064091, 1.058083, 0.997962, 1.001267, 0.980646, 0.980553]
-            profiles[r][-1]['weekly'] = [1.043168, 1.013231, 1.027018, 1.033452, 1.039303, 0.854394, 0.989434]
-            profiles[r][-1]['duirnal_weekday'] = [0, 0, 0, 0, 0, 1/18.,
-                                                  1/18., 1/18., 1/18., 1/18., 1/18., 1/18.,
-                                                  1/18., 1/18., 1/18., 1/18., 1/18., 1/18.,
-                                                  1/18., 1/18., 1/18., 1/18., 1/18., 0]
-            profiles[r][-1]['duirnal_weekend'] = [0, 0, 0, 0, 0, 1/18.,
-                                                  1/18., 1/18., 1/18., 1/18., 1/18., 1/18.,
-                                                  1/18., 1/18., 1/18., 1/18., 1/18., 1/18.,
-                                                  1/18., 1/18., 1/18., 1/18., 1/18., 0]
+            profiles[r][-1]['monthly'] = [0.962509, 0.974175, 0.989383, 0.994767, 0.999752, 1.044149,
+                                          1.052232, 1.047054, 0.993166, 0.995045, 0.972044, 0.975724]
+            profiles[r][-1]['weekly'] =  [1.036010, 1.017904, 1.025875, 1.015781, 1.037507, 0.879417, 0.987506]
+            profiles[r][-1]['duirnal_weekday'] = [0, 0, 0, 0, 1/19., 1/19.,
+                                                  1/19., 1/19., 1/19., 1/19., 1/19., 1/19.,
+                                                  1/19., 1/19., 1/19., 1/19., 1/19., 1/19.,
+                                                  1/19., 1/19., 1/19., 1/19., 1/19., 0]
+            profiles[r][-1]['duirnal_weekend'] = [0, 0, 0, 0, 1/19., 1/19.,
+                                                  1/19., 1/19., 1/19., 1/19., 1/19., 1/19.,
+                                                  1/19., 1/19., 1/19., 1/19., 1/19., 1/19.,
+                                                  1/19., 1/19., 1/19., 1/19., 1/19., 0]
 
         return profiles
 
@@ -1056,7 +1055,7 @@ class DictToNcfWriter(object):
         self.ncols = config['NCOLS']
         self.nlayers = config['NLAYERS']
         self.version = config['VERSION']
-        self.grid_file = config['GRID_CROS_FILE']
+        self.grid_file = config['GRID_DOT_FILE']
         self.gspro_file = config['GSPRO_FILE']
         self.gsref_file = config['GSREF_FILE']
         self.weight_file = config['WEIGHT_FILE']
@@ -1117,7 +1116,7 @@ class DictToNcfWriter(object):
 
         # compress output file
         if self.should_zip:
-            os.system('gzip -1 ' + out_path + ' &')
+            os.system('gzip -1 ' + out_path)
 
     def _fill_grid(self, scaled_emissions, date, ncf, gmt_shift):
         ''' Fill the entire modeling domain with a 3D grid for each pollutant.
