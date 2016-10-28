@@ -1,4 +1,5 @@
 
+from calendar monthrange
 from datetime import datetime, timedelta
 import multiprocessing
 from numpy import arcsin, array, cos, isnan, pi, radians, sin, sqrt, tan
@@ -14,6 +15,7 @@ import time
 ## RUN INFO
 DATES = ['2012-07-18', '...', '2012-07-20']
 DATE_FORMAT = '%Y-%m-%d'
+THREE_DAY_MONTH = False
 BASE_YEAR = 2012
 REGIONS = range(1, 70)
 NUM_PROCS = 2
@@ -53,18 +55,18 @@ SHOULD_ZIP = True
 
 def main():
     # parse configurables
-    config = {'DATES': DATES, 'DATE_FORMAT': DATE_FORMAT, 'BASE_YEAR': BASE_YEAR,
-              'NUM_PROCS': NUM_PROCS, 'REGIONS': REGIONS, 'GRID_DOT_FILE': GRID_DOT_FILE,
-              'MET_ZF_FILE': MET_ZF_FILE, 'NROWS': NROWS, 'NCOLS': NCOLS, 'NLAYERS': NLAYERS,
-              'ABL_METERS': ABL_METERS, 'REGION_BOX_FILE': REGION_BOX_FILE,
-              'TAKEOFF_ANGLES': TAKEOFF_ANGLES, 'LAND_ANGLES': LAND_ANGLES,
-              'RUNWAY_FILE': RUNWAY_FILE, 'FLIGHT_FRACTS_FILE': FLIGHT_FRACTS_FILE,
-              'EICS': EICS, 'AREA_FILES': AREA_FILES, 'POINT_FILES': POINT_FILES,
-              'GAI_CODES_FILE': GAI_CODES_FILE, 'FACILITY_ID_FILE': FACILITY_ID_FILE,
-              'SMOKE_AREA_FILE': SMOKE_AREA_FILE, 'SMOKE_PNT_FILE': SMOKE_PNT_FILE,
-              'SMOKE_PROF_FILE': SMOKE_PROF_FILE, 'VERSION': VERSION,
-              'GSPRO_FILE': GSPRO_FILE, 'GSREF_FILE': GSREF_FILE, 'WEIGHT_FILE': WEIGHT_FILE,
-              'OUT_DIR': OUT_DIR, 'SHOULD_ZIP': SHOULD_ZIP}
+    config = {'DATES': DATES, 'DATE_FORMAT': DATE_FORMAT, 'THREE_DAY_MONTH': THREE_DAY_MONTH,
+              'BASE_YEAR': BASE_YEAR, 'NUM_PROCS': NUM_PROCS, 'REGIONS': REGIONS,
+              'GRID_DOT_FILE': GRID_DOT_FILE, 'MET_ZF_FILE': MET_ZF_FILE, 'NROWS': NROWS,
+              'NCOLS': NCOLS, 'NLAYERS': NLAYERS, 'ABL_METERS': ABL_METERS,
+              'REGION_BOX_FILE': REGION_BOX_FILE, 'TAKEOFF_ANGLES': TAKEOFF_ANGLES,
+              'LAND_ANGLES': LAND_ANGLES, 'RUNWAY_FILE': RUNWAY_FILE,
+              'FLIGHT_FRACTS_FILE': FLIGHT_FRACTS_FILE, 'EICS': EICS, 'AREA_FILES': AREA_FILES,
+              'POINT_FILES': POINT_FILES, 'GAI_CODES_FILE': GAI_CODES_FILE,
+              'FACILITY_ID_FILE': FACILITY_ID_FILE, 'SMOKE_AREA_FILE': SMOKE_AREA_FILE,
+              'SMOKE_PNT_FILE': SMOKE_PNT_FILE, 'SMOKE_PROF_FILE': SMOKE_PROF_FILE,
+              'VERSION': VERSION, 'GSPRO_FILE': GSPRO_FILE, 'GSREF_FILE': GSREF_FILE,
+              'WEIGHT_FILE': WEIGHT_FILE, 'OUT_DIR': OUT_DIR, 'SHOULD_ZIP': SHOULD_ZIP}
 
     # parse command line
     a = 1
@@ -132,9 +134,12 @@ class GATE(object):
     def _parse_dates(self, config):
         ''' Allow for implicit data ranges by using ellipsis:
             DATES = ['2000-01-01', '...', '2000-12-31']
+            Optional: If THREE_DAY_MONTH == True, the user want to only run for 3 days in each
+                month. And we pick the second Wed, Sat, and Sunday.
         '''
         fmt = config['DATE_FORMAT']
 
+        # determine if the dates are explicitly listed, or listed by range
         if len(config['DATES']) == 3 and config['DATES'][1].strip() == '...':
             start = datetime.strptime(config['DATES'][0], fmt)
             end = datetime.strptime(config['DATES'][2], fmt)
@@ -142,10 +147,50 @@ class GATE(object):
             while start < end:
                 start += timedelta(days=1)
                 dates.append(datetime.strftime(start, fmt))
+                years.add(start)
         else:
             dates = config['DATES']
 
+        # sort date strings
         config['DATES'] = sorted(dates)
+
+        # validate dates
+        years = set()
+        for dt in config['DATES']:
+            years.add(datetime.strptime(dt, fmt).year)
+        if len(years) > 1:
+            raise ValueError('You may only run this model for one year at a time.')
+
+        # handle the case where the user wants 3 representative days/month
+        if not config['THREE_DAY_MONTH']:
+            return
+
+        # find start and end dates of period
+        start = datetime.strptime(config['DATES'][0], fmt)
+        end = datetime.strptime(config['DATES'][-1], fmt)
+
+        dates = []
+        yr = start.year
+        months = sorted(start.month, end.month + 1)
+        for month in months:
+            current = datetime(start.year, month, 1)
+            dates.append(datetime.stftime(self._nth_weekday(current, 2, 2), fmt))  # Wednesday
+            dates.append(datetime.stftime(self._nth_weekday(current, 2, 5), fmt))  # Saturday
+            dates.append(datetime.stftime(self._nth_weekday(current, 2, 6), fmt))  # Sunday
+
+        # sort date strings
+        config['DATES'] = sorted(dates)
+
+    @staticmethod
+    def _nth_weekday(the_date, nth, week_day):
+        ''' Find the Nth "blank" of the given month.
+            Where "blank" is Monday, Tuesday, etc...
+        '''
+        temp = the_date.replace(day=1)
+        adj = (week_day - temp.weekday()) % 7
+        temp += timedelta(days=adj)
+        temp += timedelta(weeks=nth - 1)
+        return temp
 
     @staticmethod
     def chunk_list(seq, num):
