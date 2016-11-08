@@ -1,5 +1,5 @@
 
-from calendar monthrange
+from calendar import monthrange
 from datetime import datetime, timedelta
 import multiprocessing
 from numpy import arcsin, array, cos, isnan, pi, radians, sin, sqrt, tan
@@ -21,7 +21,7 @@ REGIONS = range(1, 70)
 NUM_PROCS = 2
 ## GRID INFO
 GRID_DOT_FILE = 'input/grid/GRIDDOT2D.Cali_4km_321x291'
-MET_ZF_FILE = 'input/grid/METCRO3D.Cali_4km_321x291_2012_01_ZF'
+MET_ZF_FILE = 'input/grid/METCRO3D.Cali_4km_321x291_2012_01_ZF_AVG'
 NCOLS = 321
 NROWS = 291
 NLAYERS = 18
@@ -40,17 +40,18 @@ POINT_FILES = ['input/emis/st_4k.ps.v0001.810.2012.2012.rf2095_snp20160627.SMOKE
 GAI_CODES_FILE = 'input/default/gai_codes.py'
 FACILITY_ID_FILE = 'input/default/facility_ids.py'
 ## TEMPORAL INFO
-#### TODO: Perhaps we can remove all of these, since we have real data to work with.
+#### TODO: Should we can remove all of these, since we have real data to work with?
 SMOKE_AREA_FILE = 'input/temporal/ATREF_pro2012_snp20160627_smk4.csv'
 SMOKE_PNT_FILE = 'input/temporal/PTREF_pro2012_snp20160627_smk4.csv'
 SMOKE_PROF_FILE = 'input/temporal/ARPTPRO_pro2012_snp20160627_smk3_smk4.csv'
-## CMAQ OUTPUT INFO
+## OUTPUT INFO
 VERSION = 'v0100'
 GSPRO_FILE = 'input/ncf/gspro.cmaq.saprc.31dec2015.all.csv'
 GSREF_FILE = 'input/ncf/gsref_28july2016_2012s.txt'
 WEIGHT_FILE = 'input/ncf/molecular.weights.txt'
 OUT_DIR = 'output/'
 SHOULD_ZIP = True
+PRINT_TOTALS = False
 
 
 def main():
@@ -66,7 +67,8 @@ def main():
               'FACILITY_ID_FILE': FACILITY_ID_FILE, 'SMOKE_AREA_FILE': SMOKE_AREA_FILE,
               'SMOKE_PNT_FILE': SMOKE_PNT_FILE, 'SMOKE_PROF_FILE': SMOKE_PROF_FILE,
               'VERSION': VERSION, 'GSPRO_FILE': GSPRO_FILE, 'GSREF_FILE': GSREF_FILE,
-              'WEIGHT_FILE': WEIGHT_FILE, 'OUT_DIR': OUT_DIR, 'SHOULD_ZIP': SHOULD_ZIP}
+              'WEIGHT_FILE': WEIGHT_FILE, 'OUT_DIR': OUT_DIR, 'SHOULD_ZIP': SHOULD_ZIP,
+              'PRINT_TOTALS': PRINT_TOTALS}
 
     # parse command line
     a = 1
@@ -82,6 +84,8 @@ def main():
                 if typ == list:
                     sub_type = type(config[flag][0])
                     config[flag] = [sub_type(v) for v in value.split(',')]
+                elif typ == bool:
+                    config[flag] = True if value in ['True', 'true', 'TRUE', True, 1] else False
                 else:
                     config[flag] = typ(value)
 
@@ -94,7 +98,7 @@ def main():
 
 class GATE(object):
 
-    GATE_VERSION = '0.2.0'
+    GATE_VERSION = '0.2.2'
 
     def __init__(self, config):
         ''' build  each step of the model '''
@@ -105,7 +109,7 @@ class GATE(object):
         self.temp_build = TemporalSurrogateBuilder(config)
         self.spat_build = SpatialSurrogateBuilder(config)
         self.emis_scale = EmissionsScaler(config)
-        self.ncdf_write = DictToNcfWriter(config)
+        self.ncdf_write = DictToNcfWriter(config, self.GATE_VERSION)
 
     def run(self):
         ''' run each step of the model
@@ -119,7 +123,8 @@ class GATE(object):
 
         jobs = []
         for date_group in self.chunk_list(self.dates, self.num_procs):
-            j = multiprocessing.Process(target=self._scale_and_write_dates, args=(date_group, emis, spat_surrs, temp_surrs))
+            j = multiprocessing.Process(target=self._scale_and_write_dates,
+                                        args=(date_group, emis, spat_surrs, temp_surrs))
             jobs.append(j)
             j.start()
 
@@ -147,7 +152,6 @@ class GATE(object):
             while start < end:
                 start += timedelta(days=1)
                 dates.append(datetime.strftime(start, fmt))
-                years.add(start)
         else:
             dates = config['DATES']
 
@@ -169,14 +173,15 @@ class GATE(object):
         start = datetime.strptime(config['DATES'][0], fmt)
         end = datetime.strptime(config['DATES'][-1], fmt)
 
+        # generate new dates for the 3-representative days-per-month case
         dates = []
         yr = start.year
-        months = sorted(start.month, end.month + 1)
+        months = sorted(range(start.month, end.month + 1))
         for month in months:
             current = datetime(start.year, month, 1)
-            dates.append(datetime.stftime(self._nth_weekday(current, 2, 2), fmt))  # Wednesday
-            dates.append(datetime.stftime(self._nth_weekday(current, 2, 5), fmt))  # Saturday
-            dates.append(datetime.stftime(self._nth_weekday(current, 2, 6), fmt))  # Sunday
+            dates.append(datetime.strftime(self._nth_weekday(current, 2, 2), fmt))  # Wednesday
+            dates.append(datetime.strftime(self._nth_weekday(current, 2, 5), fmt))  # Saturday
+            dates.append(datetime.strftime(self._nth_weekday(current, 2, 6), fmt))  # Sunday
 
         # sort date strings
         config['DATES'] = sorted(dates)
@@ -456,6 +461,7 @@ class TemporalSurrogateBuilder(object):
                 0.063602470647153742, 0.064520616548884316, 0.067191586444827783,
                 0.06129319459128596, 0.053614156140448503, 0.060569806911134609,
                 0.048689555394802735, 0.048550442379389012, 0.039869790217572754,
+                0.027043570196427578]
 
         return profiles
 
@@ -1102,7 +1108,7 @@ class DictToNcfWriter(object):
     STONS_HR_2_G_SEC = 251.99583333333334
     POLLS = ['CO', 'NH3', 'NOX', 'SOX', 'PM', 'TOG']
 
-    def __init__(self, config):
+    def __init__(self, config, gate_version):
         self.directory = config['OUT_DIR']
         self.eics = config['EICS']
         self.nrows = config['NROWS']
@@ -1113,8 +1119,9 @@ class DictToNcfWriter(object):
         self.gspro_file = config['GSPRO_FILE']
         self.gsref_file = config['GSREF_FILE']
         self.weight_file = config['WEIGHT_FILE']
-        truthy = [True, 1, 'True', 'true', 'TRUE', 'yes', 'zip']
-        self.should_zip = True if config['SHOULD_ZIP'] in truthy else False
+        self.should_zip = config['SHOULD_ZIP']
+        self.three_day_month = config['THREE_DAY_MONTH']
+        self.print_totals = config['PRINT_TOTALS']
         self.gspro = {}
         self.gsref = {}
         self.groups = {}
@@ -1122,33 +1129,45 @@ class DictToNcfWriter(object):
         self.base_year = int(config['BASE_YEAR'])
         self.date_format = config['DATE_FORMAT']
         self.dates = config['DATES']
+        self.in_file = config['POINT_FILES'][0] if config['POINT_FILES'] else config['AREA_FILES'][0] if config['AREA_FILES'] else ''
+        self.in_file = self.in_file.split('/')[-1]
+        file_desc = "gspro: " + self.gspro_file.split('/')[-1] + "   gsref: " + \
+                    self.gsref_file.split('/')[-1] + "   molecular weights: " + \
+                    self.weight_file.split('/')[-1] + "   FF10 point emis: " + \
+                    ','.join([pf.split('/')[-1] for pf in config['POINT_FILES']]) + \
+                    "   FF10 area emis: " + \
+                    ','.join([af.split('/')[-1] for af in config['AREA_FILES']])
+        history = "3D-gridded aircraft emissions, created by the GATE model v" + gate_version + \
+                  " on " + datetime.strftime(datetime.now(), '%Y-%m-%d')
         # default NetCDF header for on-road emissions on California's 4km modeling domain
         self.header = {'IOAPI_VERSION': "$Id: @(#) ioapi library version 3.1 $" + " "*43,
-                       'EXEC_ID': "????????????????" + " "*64,
-                       'FTYPE': 1,               # file type ID
-                       'STIME': 80000,           # start time    e.g. 80000 (for GMT)
-                       'TSTEP': 10000,           # time step     e.g. 10000 (1 hour)
-                       'NTHIK': 1,               # Domain: perimeter thickness (boundary files only)
-                       'NCOLS': self.ncols,      # Domain: number of columns in modeling domain
-                       'NROWS': self.nrows,      # Domain: number of rows in modeling domain
-                       'NLAYS': 1,               # Domain: number of vertical layers
-                       'GDTYP': 2,               # Domain: grid type ID (lat-lon, UTM, RADM, etc...)
-                       'P_ALP': 30.0,            # Projection: alpha
-                       'P_BET': 60.0,            # Projection: betha
-                       'P_GAM': -120.5,          # Projection: gamma
-                       'XCENT': -120.5,          # Projection: x centroid longitude
-                       'YCENT': 37.0,            # Projection: y centroid latitude
-                       'XORIG': -684000.0,       # Domain: -684000 for CA_4k, -84000 for SC_4k
-                       'YORIG': -564000.0,       # Domain: -564000 for CA_4k, -552000 for SC_4k
-                       'XCELL': 4000.0,          # Domain: x cell width in meters
-                       'YCELL': 4000.0,          # Domain: y cell width in meters
-                       'VGTYP': 2,               # Domain: grid type ID (lat-lon, UTM, RADM, etc...)
-                       'VGTOP': 10000,           # Domain: Top Vertical layer at 10km
-                       'VGLVLS': [1.0, 0.9958],  # Domain: Vertical layer locations
+                       'EXEC_ID': "?"*16 + " "*64,
+                       'FTYPE': 1,             # file type ID
+                       'STIME': 80000,         # start time    e.g. 80000 (for GMT)
+                       'TSTEP': 10000,         # time step     e.g. 10000 (1 hour)
+                       'NTHIK': 1,             # Domain: perimeter thickness (boundary files only)
+                       'NCOLS': self.ncols,    # Domain: number of columns in modeling domain
+                       'NROWS': self.nrows,    # Domain: number of rows in modeling domain
+                       'NLAYS': self.nlayers,  # Domain: number of vertical layers
+                       'GDTYP': 2,             # Domain: grid type ID (lat-lon, UTM, RADM, etc...)
+                       'P_ALP': 30.0,          # Projection: alpha
+                       'P_BET': 60.0,          # Projection: betha
+                       'P_GAM': -120.5,        # Projection: gamma
+                       'XCENT': -120.5,        # Projection: x centroid longitude
+                       'YCENT': 37.0,          # Projection: y centroid latitude
+                       'XORIG': -684000.0,     # Domain: -684000 for CA_4k, -84000 for SC_4k
+                       'YORIG': -564000.0,     # Domain: -564000 for CA_4k, -552000 for SC_4k
+                       'XCELL': 4000.0,        # Domain: x cell width in meters
+                       'YCELL': 4000.0,        # Domain: y cell width in meters
+                       'VGTYP': 7,             # Domain: grid type ID (lat-lon, UTM, RADM, etc...)
+                       'VGTOP': 10000.0,       # Domain: Top Vertical layer at 10km
+                       'VGLVLS': [1.0, 0.9958, 0.9907, 0.9846, 0.9774, 0.9688, 0.9585, 0.9463,
+                                  0.9319, 0.9148, 0.8946, 0.8709, 0.8431, 0.8107, 0.7733, 0.6254,
+                                  0.293, 0.0788, 0.0],  # Domain: Vertical layer locations
                        'GDNAM': "CMAQ Emissions  ",
                        'UPNAM': "combineEmis_wdwe",
-                       'FILEDESC': "",
-                       'HISTORY': ""}
+                       'FILEDESC': file_desc,
+                       'HISTORY': history}
         # Read speciation profiles & molecular weight files
         self._load_weight_file()
         self._load_gsref()
@@ -1166,13 +1185,13 @@ class DictToNcfWriter(object):
         ncf, gmt_shift = self._create_netcdf(out_path, dt, jdate)
 
         # fill netcdf file with data
-        self._fill_grid(emis, date, ncf, gmt_shift)
+        self._fill_grid(emis, date, ncf, gmt_shift, out_path)
 
         # compress output file
         if self.should_zip:
             os.system('gzip -1 ' + out_path)
 
-    def _fill_grid(self, scaled_emissions, date, ncf, gmt_shift):
+    def _fill_grid(self, scaled_emissions, date, ncf, gmt_shift, out_path):
         ''' Fill the entire modeling domain with a 3D grid for each pollutant.
             Fill the emissions values in each grid cell, for each polluant.
             Create a separate grid set for each date.
@@ -1235,7 +1254,34 @@ class DictToNcfWriter(object):
                     if hr == 0:
                         ncf.variables[spec][24,:,:,:] = grid
 
+        if self.print_totals:
+            self._print_totals_to_csv(ncf, out_path)
+
         ncf.close()
+
+    def _print_totals_to_csv(self, ncf, out_path):
+        ''' if requested, print a simple CSV of totals, by pollutant
+        '''
+        # create species totals
+        totals = {}
+        for spec in ncf.variables:
+            if spec == 'TFLAG': continue
+            totals[spec] = np.sum(ncf.variables[spec][:24,:,:,:])
+
+        # write output file
+        fout = open(out_path.replace('.ncf', '.totals.csv'), 'w')
+        fout.write('species,total\n')
+
+        # write pollutant totals
+        for poll in sorted(self.POLLS):
+            fout.write(poll + ',' + str(sum([totals[sp] for sp in self.groups[poll]['species']])) + '\n')
+
+        # write species totals
+        for spec in sorted(totals.keys()):
+            fout.write(spec + ',' + str(totals[spec]) + '\n')
+
+        fout.close()
+
 
     def _add_grid_cells(self, grid, grid_cells, fraction):
         ''' Given a dictionary of (layer, row, col) -> float,
@@ -1277,7 +1323,7 @@ class DictToNcfWriter(object):
                 ncf.variables[species].long_name = species
                 ncf.variables[species].units = self.groups[group]['units']
                 ncf.variables[species].var_desc = 'emissions'
-                varl += species.ljust(16)
+                varl += species + ','
 
         # global attributes
         ncf.IOAPI_VERSION = self.header['IOAPI_VERSION']
@@ -1327,6 +1373,8 @@ class DictToNcfWriter(object):
             tflag[hr,:,0] = tflag[hr,:,0] * a_date
             tflag[hr,:,1] = tflag[hr,:,1] * ghr
         ncf.variables['TFLAG'][:] = tflag
+
+        ncf.VGTYP = 7
 
         return ncf, gmt_shift
 
@@ -1442,8 +1490,10 @@ class DictToNcfWriter(object):
             [statewide]_[4km grid].[aircraft].[version 938]..[base year 2012].
             [model year 2031][month 7]d[day 18]..[EIC 14 categories]..ncf
         """
+        # parse date info
         yr, month, day = date.strftime(self.date_format).split('-')
 
+        # create output dir, if necessary
         out_dir = os.path.join(self.directory, 'ncf')
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
@@ -1460,9 +1510,28 @@ class DictToNcfWriter(object):
         elif '250m' in grid_name:
             grid_size = '250m'
 
-        # TODO: "st" = state, "sc" = South Coast, "us" = United States
-        file_name = 'st_' + grid_size + '.ac.' + self.version + '..' + str(self.base_year) + '.' + \
-                    yr + month + 'd' + day + '..e14..ncf'
+        # find region from example inventory file
+        region = 'st_'
+        if self.in_file[3] == '_':
+            region = self.in_file[:4]
+        elif self.in_file[2] == '_':
+            region = self.in_file[:3]
+
+        # find the snapshot code, if any
+        snapshot = ''
+        file_bits = self.in_file.split('.')
+        if len(file_bits) > 8:
+            if 'snp' in file_bits[6] or 'rf' in file_bits[6]:
+                snapshot = file_bits[6]
+
+        # build the file path, in one of two different formats
+        if self.three_day_month:
+            weekday = 'sat' if date.weekday() == 5 else 'sun' if date.weekday() == 6 else 'wdy'
+            file_name = region + grid_size + '.ac.' + self.version + '..' + str(self.base_year) + \
+                        '.' + yr + month + weekday + '.' + snapshot + '.e14..ncf'
+        else:
+            file_name = region + grid_size + '.ac.' + self.version + '..' + str(self.base_year) + \
+                        '.' + yr + month + 'd' + day + '.' + snapshot + '.e14..ncf'
 
         return os.path.join(out_dir, file_name)
 
