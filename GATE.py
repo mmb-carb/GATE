@@ -25,6 +25,7 @@ MET_ZF_FILE = 'input/grid/METCRO3D.Cali_4km_321x291_2012_01_ZF_AVG'
 NCOLS = 321
 NROWS = 291
 NLAYERS = 18
+NUM_NONZERO_LAYERS = 12
 ABL_METERS = 1000
 REGION_BOX_FILE = 'input/default/region_boxes.py'
 ## FLIGHT PATH INFO
@@ -59,16 +60,16 @@ def main():
     config = {'DATES': DATES, 'DATE_FORMAT': DATE_FORMAT, 'THREE_DAY_MONTH': THREE_DAY_MONTH,
               'BASE_YEAR': BASE_YEAR, 'NUM_PROCS': NUM_PROCS, 'REGIONS': REGIONS,
               'GRID_DOT_FILE': GRID_DOT_FILE, 'MET_ZF_FILE': MET_ZF_FILE, 'NROWS': NROWS,
-              'NCOLS': NCOLS, 'NLAYERS': NLAYERS, 'ABL_METERS': ABL_METERS,
-              'REGION_BOX_FILE': REGION_BOX_FILE, 'TAKEOFF_ANGLES': TAKEOFF_ANGLES,
-              'LAND_ANGLES': LAND_ANGLES, 'RUNWAY_FILE': RUNWAY_FILE,
-              'FLIGHT_FRACTS_FILE': FLIGHT_FRACTS_FILE, 'EICS': EICS, 'AREA_FILES': AREA_FILES,
-              'POINT_FILES': POINT_FILES, 'GAI_CODES_FILE': GAI_CODES_FILE,
-              'FACILITY_ID_FILE': FACILITY_ID_FILE, 'SMOKE_AREA_FILE': SMOKE_AREA_FILE,
-              'SMOKE_PNT_FILE': SMOKE_PNT_FILE, 'SMOKE_PROF_FILE': SMOKE_PROF_FILE,
-              'VERSION': VERSION, 'GSPRO_FILE': GSPRO_FILE, 'GSREF_FILE': GSREF_FILE,
-              'WEIGHT_FILE': WEIGHT_FILE, 'OUT_DIR': OUT_DIR, 'SHOULD_ZIP': SHOULD_ZIP,
-              'PRINT_TOTALS': PRINT_TOTALS}
+              'NCOLS': NCOLS, 'NLAYERS': NLAYERS, 'NUM_NONZERO_LAYERS': NUM_NONZERO_LAYERS,
+              'ABL_METERS': ABL_METERS, 'REGION_BOX_FILE': REGION_BOX_FILE,
+              'TAKEOFF_ANGLES': TAKEOFF_ANGLES, 'LAND_ANGLES': LAND_ANGLES,
+              'RUNWAY_FILE': RUNWAY_FILE, 'FLIGHT_FRACTS_FILE': FLIGHT_FRACTS_FILE,
+              'EICS': EICS, 'AREA_FILES': AREA_FILES, 'POINT_FILES': POINT_FILES,
+              'GAI_CODES_FILE': GAI_CODES_FILE, 'FACILITY_ID_FILE': FACILITY_ID_FILE,
+              'SMOKE_AREA_FILE': SMOKE_AREA_FILE, 'SMOKE_PNT_FILE': SMOKE_PNT_FILE,
+              'SMOKE_PROF_FILE': SMOKE_PROF_FILE, 'VERSION': VERSION, 'GSPRO_FILE': GSPRO_FILE,
+              'GSREF_FILE': GSREF_FILE, 'WEIGHT_FILE': WEIGHT_FILE, 'OUT_DIR': OUT_DIR,
+              'SHOULD_ZIP': SHOULD_ZIP, 'PRINT_TOTALS': PRINT_TOTALS}
 
     # parse command line
     a = 1
@@ -98,10 +99,11 @@ def main():
 
 class GATE(object):
 
-    GATE_VERSION = '0.2.2'
+    GATE_VERSION = '0.2.3'
 
     def __init__(self, config):
         ''' build  each step of the model '''
+        config['GATE_VERSION'] = self.GATE_VERSION
         self._parse_dates(config)
         self.dates = config['DATES']
         self.num_procs = config['NUM_PROCS']
@@ -109,7 +111,7 @@ class GATE(object):
         self.temp_build = TemporalSurrogateBuilder(config)
         self.spat_build = SpatialSurrogateBuilder(config)
         self.emis_scale = EmissionsScaler(config)
-        self.ncdf_write = DictToNcfWriter(config, self.GATE_VERSION)
+        self.ncdf_write = DictToNcfWriter(config)
 
     def run(self):
         ''' run each step of the model
@@ -1108,12 +1110,12 @@ class DictToNcfWriter(object):
     STONS_HR_2_G_SEC = 251.99583333333334
     POLLS = ['CO', 'NH3', 'NOX', 'SOX', 'PM', 'TOG']
 
-    def __init__(self, config, gate_version):
+    def __init__(self, config):
         self.directory = config['OUT_DIR']
         self.eics = config['EICS']
         self.nrows = config['NROWS']
         self.ncols = config['NCOLS']
-        self.nlayers = config['NLAYERS']
+        self.nlayers = config['NUM_NONZERO_LAYERS']
         self.version = config['VERSION']
         self.grid_file = config['GRID_DOT_FILE']
         self.gspro_file = config['GSPRO_FILE']
@@ -1131,14 +1133,15 @@ class DictToNcfWriter(object):
         self.dates = config['DATES']
         self.in_file = config['POINT_FILES'][0] if config['POINT_FILES'] else config['AREA_FILES'][0] if config['AREA_FILES'] else ''
         self.in_file = self.in_file.split('/')[-1]
+        # build some custom text to put in the NetCDF header
         file_desc = "gspro: " + self.gspro_file.split('/')[-1] + "   gsref: " + \
                     self.gsref_file.split('/')[-1] + "   molecular weights: " + \
                     self.weight_file.split('/')[-1] + "   FF10 point emis: " + \
                     ','.join([pf.split('/')[-1] for pf in config['POINT_FILES']]) + \
                     "   FF10 area emis: " + \
                     ','.join([af.split('/')[-1] for af in config['AREA_FILES']])
-        history = "3D-gridded aircraft emissions, created by the GATE model v" + gate_version + \
-                  " on " + datetime.strftime(datetime.now(), '%Y-%m-%d')
+        history = "3D-gridded aircraft emissions, created by the GATE model v" + \
+                  config['GATE_VERSION'] + " on " + datetime.strftime(datetime.now(), '%Y-%m-%d')
         # default NetCDF header for on-road emissions on California's 4km modeling domain
         self.header = {'IOAPI_VERSION': "$Id: @(#) ioapi library version 3.1 $" + " "*43,
                        'EXEC_ID': "?"*16 + " "*64,
