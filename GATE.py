@@ -1326,7 +1326,7 @@ class DictToNcfWriter(object):
                 ncf.variables[species].long_name = species
                 ncf.variables[species].units = self.groups[group]['units']
                 ncf.variables[species].var_desc = 'emissions'
-                varl += species + ','
+                varl += species.ljust(16)
 
         # global attributes
         ncf.IOAPI_VERSION = self.header['IOAPI_VERSION']
