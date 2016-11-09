@@ -12,7 +12,7 @@ import time
 
 # USER CONFIGURABLES
 ## RUN INFO
-DATES = ['2012-07-18', '...', '2012-07-20']
+DATES = ['2012-07-18', '...', '2012-07-24']
 DATE_FORMAT = '%Y-%m-%d'
 THREE_DAY_MONTH = False
 BASE_YEAR = 2012
@@ -1141,8 +1141,8 @@ class DictToNcfWriter(object):
                     ','.join([af.split('/')[-1] for af in config['AREA_FILES']])
         history = "3D-gridded aircraft emissions, created by the GATE model v" + \
                   config['GATE_VERSION'] + " on " + datetime.strftime(datetime.now(), '%Y-%m-%d')
-        vglvls = [1.0, 0.9958, 0.9907, 0.9846, 0.9774, 0.9688, 0.9585, 0.9463, 0.9319, 0.9148,
-                  0.8946, 0.8709, 0.8431, 0.8107, 0.7733, 0.6254, 0.293, 0.0788, 0.0]
+        vglvls = np.float32([1.0, 0.9958, 0.9907, 0.9846, 0.9774, 0.9688, 0.9585, 0.9463, 0.9319,
+                  0.9148, 0.8946, 0.8709, 0.8431, 0.8107, 0.7733, 0.6254, 0.293, 0.0788, 0.0])
         if config['NLAYERS'] > self.nlayers:
             vglvls = vglvls[:self.nlayers + 1]
         # default NetCDF header for on-road emissions on California's 4km modeling domain
@@ -1166,7 +1166,7 @@ class DictToNcfWriter(object):
                        'XCELL': 4000.0,        # Domain: x cell width in meters
                        'YCELL': 4000.0,        # Domain: y cell width in meters
                        'VGTYP': 7,             # Domain: grid type ID (lat-lon, UTM, RADM, etc...)
-                       'VGTOP': 10000.0,       # Domain: Top Vertical layer at 10km
+                       'VGTOP': np.float32(10000.0),  # Domain: Top Vertical layer at 10km
                        'VGLVLS': vglvls,       # Domain: Vertical layer locations
                        'GDNAM': "CMAQ Emissions  ",
                        'UPNAM': "combineEmis_wdwe",
