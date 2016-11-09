@@ -1,5 +1,4 @@
 
-from calendar import monthrange
 from datetime import datetime, timedelta
 import multiprocessing
 from numpy import arcsin, array, cos, isnan, pi, radians, sin, sqrt, tan
@@ -445,7 +444,7 @@ class TemporalSurrogateBuilder(object):
             # values for default airports
             profiles[r][-1]['monthly'] = [0.962509, 0.974175, 0.989383, 0.994767, 0.999752, 1.044149,
                                           1.052232, 1.047054, 0.993166, 0.995045, 0.972044, 0.975724]
-            profiles[r][-1]['weekly'] =  [1.036010, 1.017904, 1.025875, 1.015781, 1.037507, 0.879417, 0.987506]
+            profiles[r][-1]['weekly'] = [1.036010, 1.017904, 1.025875, 1.015781, 1.037507, 0.879417, 0.987506]
             profiles[r][-1]['duirnal_weekday'] = [0.0070112959768515943, 0.0018641144065438763,
                 8.3467809248233263e-05, 0.00011129041233097768, 0.0008346780924823326,
                 0.011407267263925212, 0.033136720271548604, 0.040565355294641364,
@@ -594,7 +593,7 @@ class SpatialSurrogateBuilder(object):
                     # landing
                     land = {}
                     for angle in self.landing_angles:
-                            self.add_dict(land, self._gen_surrogate_1runway(region, lat0, lon0, lat1, lon1, angle, cell0))
+                        self.add_dict(land, self._gen_surrogate_1runway(region, lat0, lon0, lat1, lon1, angle, cell0))
                     self.scale_dict(land, land_scalar)
 
                     # take-off
