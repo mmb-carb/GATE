@@ -1142,6 +1142,10 @@ class DictToNcfWriter(object):
                     ','.join([af.split('/')[-1] for af in config['AREA_FILES']])
         history = "3D-gridded aircraft emissions, created by the GATE model v" + \
                   config['GATE_VERSION'] + " on " + datetime.strftime(datetime.now(), '%Y-%m-%d')
+        vglvls = [1.0, 0.9958, 0.9907, 0.9846, 0.9774, 0.9688, 0.9585, 0.9463, 0.9319, 0.9148,
+                  0.8946, 0.8709, 0.8431, 0.8107, 0.7733, 0.6254, 0.293, 0.0788, 0.0]
+        if config['NLAYERS'] > self.nlayers:
+            vglvls = vglvls[:self.nlayers + 1]
         # default NetCDF header for on-road emissions on California's 4km modeling domain
         self.header = {'IOAPI_VERSION': "$Id: @(#) ioapi library version 3.1 $" + " "*43,
                        'EXEC_ID': "?"*16 + " "*64,
@@ -1164,9 +1168,7 @@ class DictToNcfWriter(object):
                        'YCELL': 4000.0,        # Domain: y cell width in meters
                        'VGTYP': 7,             # Domain: grid type ID (lat-lon, UTM, RADM, etc...)
                        'VGTOP': 10000.0,       # Domain: Top Vertical layer at 10km
-                       'VGLVLS': [1.0, 0.9958, 0.9907, 0.9846, 0.9774, 0.9688, 0.9585, 0.9463,
-                                  0.9319, 0.9148, 0.8946, 0.8709, 0.8431, 0.8107, 0.7733, 0.6254,
-                                  0.293, 0.0788, 0.0],  # Domain: Vertical layer locations
+                       'VGLVLS': vglvls,       # Domain: Vertical layer locations
                        'GDNAM': "CMAQ Emissions  ",
                        'UPNAM': "combineEmis_wdwe",
                        'FILEDESC': file_desc,
