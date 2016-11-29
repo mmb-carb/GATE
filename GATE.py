@@ -83,7 +83,10 @@ def main():
 
                 if typ == list:
                     sub_type = type(config[flag][0])
-                    config[flag] = [sub_type(v) for v in value.split(',')]
+                    if value == "[]":  # Allow the user to input an empty list.
+                        config[flag] = []
+                    else:
+                        config[flag] = [sub_type(v) for v in value.split(',')]
                 elif typ == bool:
                     config[flag] = True if value in ['True', 'true', 'TRUE', True, 1] else False
                 else:
@@ -135,7 +138,7 @@ class GATE(object):
         '''
         for date in dates:
             scaled_emis = self.emis_scale.scale(emis, spat_surrs, temp_surrs, date)
-            self.ncdf_write.write(scaled_emis, date)
+            self.ncdf_write.write(scaled_emis, emis, date)
 
     def _parse_dates(self, config):
         ''' Allow for implicit data ranges by using ellipsis:
@@ -1177,7 +1180,7 @@ class DictToNcfWriter(object):
         self._load_gsref()
         self._load_gspro()
 
-    def write(self, emis, date):
+    def write(self, scaled_emis, emis, date):
         ''' Write a CMAQ-ready NetCDF file for a single day
         '''
         # get Julian date
@@ -1189,13 +1192,13 @@ class DictToNcfWriter(object):
         ncf, gmt_shift = self._create_netcdf(out_path, dt, jdate)
 
         # fill netcdf file with data
-        self._fill_grid(emis, date, ncf, gmt_shift, out_path)
+        self._fill_grid(scaled_emis, emis, date, ncf, gmt_shift, out_path)
 
         # compress output file
         if self.should_zip:
             os.system('gzip -1 ' + out_path)
 
-    def _fill_grid(self, scaled_emissions, date, ncf, gmt_shift, out_path):
+    def _fill_grid(self, scaled_emissions, emis, date, ncf, gmt_shift, out_path):
         ''' Fill the entire modeling domain with a 3D grid for each pollutant.
             Fill the emissions values in each grid cell, for each polluant.
             Create a separate grid set for each date.
@@ -1259,30 +1262,51 @@ class DictToNcfWriter(object):
                         ncf.variables[spec][24,:,:,:] = grid
 
         if self.print_totals:
-            self._print_totals_to_csv(ncf, out_path)
+            self._print_totals_to_csv(ncf, emis, out_path)
 
         ncf.close()
 
-    def _print_totals_to_csv(self, ncf, out_path):
+    def _print_totals_to_csv(self, ncf, emis, out_path):
         ''' if requested, print a simple CSV of totals, by pollutant
+            format: emis[region][airport][eic][poll] => value (tons/day)
         '''
-        # create species totals
+        # find species position by pollutant
+        species = {}
+        for group in self.groups:
+            for i in xrange(len(np.atleast_1d(self.groups[group]['species']))):
+                species[self.groups[group]['species'][i]] = {'group': group, 'index': i}
+
+        # create NCF species totals
         totals = {}
         for spec in ncf.variables:
             if spec == 'TFLAG': continue
             totals[spec] = np.sum(ncf.variables[spec][:24,:,:,:])
 
+        # create input pollutant totals
+        in_totals = {}
+        for region, airport_emis in emis.iteritems():
+            for airport, eic_emis in airport_emis.iteritems():
+                for eic, poll_emis in eic_emis.iteritems():
+                    for poll, value in poll_emis.iteritems():
+                        if poll not in in_totals:
+                            in_totals[poll] = 0.0
+                        in_totals[poll] += value
+
         # write output file
         fout = open(out_path.replace('.ncf', '.totals.csv'), 'w')
-        fout.write('species,total\n')
+        fout.write('Pollutant,Input(tons/day),Output(tons/day)\n')
 
         # write pollutant totals
         for poll in sorted(self.POLLS):
-            fout.write(poll + ',' + str(sum([totals[sp] for sp in self.groups[poll]['species']])) + '\n')
+            ncf_total = 0.0
+            for sp in self.groups[poll]['species']:
+                ind = species[sp]['index']
+                fraction = (self.STONS_HR_2_G_SEC / self.groups[poll]['weights'][ind])
+                ncf_total += totals[sp] / fraction
 
-        # write species totals
-        for spec in sorted(totals.keys()):
-            fout.write(spec + ',' + str(totals[spec]) + '\n')
+            in_total = in_totals[poll] if poll in in_totals else 0.0
+            if in_total + ncf_total > 0.0:
+                fout.write(poll + ',' + str(in_total) + ',' + str(ncf_total) + '\n')
 
         fout.close()
 
