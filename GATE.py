@@ -1275,6 +1275,8 @@ class DictToNcfWriter(object):
         for group in self.groups:
             for i in xrange(len(np.atleast_1d(self.groups[group]['species']))):
                 species[self.groups[group]['species'][i]] = {'group': group, 'index': i}
+        no2_ind = np.where(self.groups['NOX']['species']=='NO2')[0][0]
+        so2_ind = np.where(self.groups['SOX']['species']=='SO2')[0][0]
 
         # create NCF species totals
         totals = {}
@@ -1302,6 +1304,11 @@ class DictToNcfWriter(object):
             for sp in self.groups[poll]['species']:
                 ind = species[sp]['index']
                 fraction = (self.STONS_HR_2_G_SEC / self.groups[poll]['weights'][ind])
+                # fix species weights for multi-species gases
+                if poll == 'NOX':
+                    fraction *= self.groups[poll]['weights'][ind] / self.groups[poll]['weights'][no2_ind]
+                elif poll == 'SOX':
+                    fraction *= self.groups[poll]['weights'][ind] / self.groups[poll]['weights'][so2_ind]
                 ncf_total += totals[sp] / fraction
 
             in_total = in_totals[poll] if poll in in_totals else 0.0
