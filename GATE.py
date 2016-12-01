@@ -41,6 +41,7 @@ GAI_CODES_FILE = 'input/default/gai_codes.py'
 FACILITY_ID_FILE = 'input/default/facility_ids.py'
 ## TEMPORAL INFO
 #### TODO: Should we can remove all of these, since we have real data to work with?
+#### TODO: Or should we just move the default temporal profiles to the SMOKE format?
 SMOKE_AREA_FILE = 'input/temporal/ATREF_pro2012_snp20160627_smk4.csv'
 SMOKE_PNT_FILE = 'input/temporal/PTREF_pro2012_snp20160627_smk4.csv'
 SMOKE_PROF_FILE = 'input/temporal/ARPTPRO_pro2012_snp20160627_smk3_smk4.csv'
@@ -70,7 +71,7 @@ def main():
               'GSREF_FILE': GSREF_FILE, 'WEIGHT_FILE': WEIGHT_FILE, 'OUT_DIR': OUT_DIR,
               'SHOULD_ZIP': SHOULD_ZIP, 'PRINT_TOTALS': PRINT_TOTALS}
 
-    # parse command line
+    # parse command-line
     a = 1
     while a < len(sys.argv):
         flag = sys.argv[a]
@@ -91,6 +92,8 @@ def main():
                     config[flag] = True if value in ['True', 'true', 'TRUE', True, 1] else False
                 else:
                     config[flag] = typ(value)
+        else:
+            print('ERROR: Command-Line Flag Not Recognized: ' + flag)
 
         a += 1
 
@@ -101,7 +104,7 @@ def main():
 
 class GATE(object):
 
-    GATE_VERSION = '0.2.3'
+    GATE_VERSION = '0.2.4'
 
     def __init__(self, config):
         ''' build  each step of the model '''
@@ -289,7 +292,7 @@ class EmissionsReader(object):
             if region not in self.airports: continue
             if region not in self.airport_emis:
                 self.airport_emis[region] = {}
-            total_flights = float(sum([d['flights'] for d in self.airports[region].itervalues()]))
+            total_flights = float(sum([a['flights'] for a in self.airports[region].itervalues()]))
 
             for airport, airport_data in self.airports[region].iteritems():
                 if airport not in self.airport_emis[region]:
@@ -606,7 +609,10 @@ class SpatialSurrogateBuilder(object):
                     self.scale_dict(toff, toff_scalar)
 
                     # taxi-ing
-                    taxi = {cell0: 0.5, cell1: 0.5}
+                    if cell0 != cell1:
+                        taxi = {cell0: 0.5, cell1: 0.5}
+                    else:
+                        taxi = {cell0: 1.0}
 
                     # fill surrogates by eic and pollutant
                     for eic, poll_fracts in self.flight_fracts.iteritems():
@@ -1244,6 +1250,7 @@ class DictToNcfWriter(object):
 
                         # species fractions
                         fraction = (self.STONS_HR_2_G_SEC / self.groups[poll]['weights'][ind])
+
                         if poll == 'TOG' and len(tog_fraction):
                             fraction *= tog_fraction[ind]
                         elif poll == 'PM' and len(pm_fraction):
@@ -1262,13 +1269,14 @@ class DictToNcfWriter(object):
                         ncf.variables[spec][24,:,:,:] = grid
 
         if self.print_totals:
-            self._print_totals_to_csv(ncf, emis, out_path)
+            self._print_totals_to_csv(ncf, scaled_emissions, emis, out_path)
 
         ncf.close()
 
-    def _print_totals_to_csv(self, ncf, emis, out_path):
+    def _print_totals_to_csv(self, ncf, scaled_emis, emis, out_path):
         ''' if requested, print a simple CSV of totals, by pollutant
-            format: emis[region][airport][eic][poll] => value (tons/day)
+            emis[region][airport][eic][poll] => tons/day
+            scaled_emis[EIC][hr][poll][grid cell] => tons/day
         '''
         # find species position by pollutant
         species = {}
@@ -1286,17 +1294,27 @@ class DictToNcfWriter(object):
 
         # create input pollutant totals
         in_totals = {}
-        for region, airport_emis in emis.iteritems():
-            for airport, eic_emis in airport_emis.iteritems():
-                for eic, poll_emis in eic_emis.iteritems():
+        for airport_emis in emis.itervalues():
+            for eic_emis in airport_emis.itervalues():
+                for poll_emis in eic_emis.itervalues():
                     for poll, value in poll_emis.iteritems():
                         if poll not in in_totals:
                             in_totals[poll] = 0.0
                         in_totals[poll] += value
 
+        # create pollutant totals after scaling step
+        scaled_totals = {}
+        for hourly_vals in scaled_emis.itervalues():
+            for poll_vals in hourly_vals.itervalues():
+                for poll, grid_vals in poll_vals.iteritems():
+                    if poll not in scaled_totals:
+                        scaled_totals[poll] = 0.0
+                    for val in grid_vals.itervalues():
+                        scaled_totals[poll] += val
+
         # write output file
         fout = open(out_path.replace('.ncf', '.totals.csv'), 'w')
-        fout.write('Pollutant,Input(tons/day),Output(tons/day)\n')
+        fout.write('Pollutant,Input(tons/day),Scaled_PreNCF(tons/day),Output(tons/day)\n')
 
         # write pollutant totals
         for poll in sorted(self.POLLS):
@@ -1312,11 +1330,11 @@ class DictToNcfWriter(object):
                 ncf_total += totals[sp] / fraction
 
             in_total = in_totals[poll] if poll in in_totals else 0.0
+            scaled_total = scaled_totals[poll] if poll in scaled_totals else 0.0
             if in_total + ncf_total > 0.0:
-                fout.write(poll + ',' + str(in_total) + ',' + str(ncf_total) + '\n')
+                fout.write(poll + ',' + str(in_total) + ',' + str(scaled_total) + ',' + str(ncf_total) + '\n')
 
         fout.close()
-
 
     def _add_grid_cells(self, grid, grid_cells, fraction):
         ''' Given a dictionary of (layer, row, col) -> float,
