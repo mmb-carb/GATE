@@ -1115,6 +1115,7 @@ class EmissionsScaler(object):
 
 class DictToNcfWriter(object):
 
+    KG_2_TON = 0.00110231131092
     STONS_HR_2_G_SEC = 251.99583333333334
     POLLS = ['CO', 'NH3', 'NOX', 'SOX', 'PM', 'TOG']
 
@@ -1318,7 +1319,8 @@ class DictToNcfWriter(object):
                     fraction *= self.groups[poll]['weights'][ind] / self.groups[poll]['weights'][so2_ind]
                 ncf_total += totals[sp] / fraction
 
-            in_total = in_totals[poll] if poll in in_totals else 0.0
+            in_total = in_totals[poll] * self.KG_2_TON if poll in in_totals else 0.0
+            ncf_total *= self.KG_2_TON
             if in_total + ncf_total > 0.0:
                 fout.write(poll + ',' + str(in_total) + ',' + str(ncf_total) + '\n')
 
