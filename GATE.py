@@ -104,7 +104,7 @@ def main():
 
 class GATE(object):
 
-    GATE_VERSION = '0.2.4'
+    GATE_VERSION = '0.2.5'
 
     def __init__(self, config):
         ''' build  each step of the model '''
@@ -1269,14 +1269,13 @@ class DictToNcfWriter(object):
                         ncf.variables[spec][24,:,:,:] = grid
 
         if self.print_totals:
-            self._print_totals_to_csv(ncf, scaled_emissions, emis, out_path)
+            self._print_totals_to_csv(ncf, emis, out_path)
 
         ncf.close()
 
-    def _print_totals_to_csv(self, ncf, scaled_emis, emis, out_path):
+    def _print_totals_to_csv(self, ncf, emis, out_path):
         ''' if requested, print a simple CSV of totals, by pollutant
             emis[region][airport][eic][poll] => tons/day
-            scaled_emis[EIC][hr][poll][grid cell] => tons/day
         '''
         # find species position by pollutant
         species = {}
@@ -1302,19 +1301,9 @@ class DictToNcfWriter(object):
                             in_totals[poll] = 0.0
                         in_totals[poll] += value
 
-        # create pollutant totals after scaling step
-        scaled_totals = {}
-        for hourly_vals in scaled_emis.itervalues():
-            for poll_vals in hourly_vals.itervalues():
-                for poll, grid_vals in poll_vals.iteritems():
-                    if poll not in scaled_totals:
-                        scaled_totals[poll] = 0.0
-                    for val in grid_vals.itervalues():
-                        scaled_totals[poll] += val
-
         # write output file
         fout = open(out_path.replace('.ncf', '.totals.csv'), 'w')
-        fout.write('Pollutant,Input(tons/day),Scaled_PreNCF(tons/day),Output(tons/day)\n')
+        fout.write('Pollutant,Input(tons/day),Output(tons/day)\n')
 
         # write pollutant totals
         for poll in sorted(self.POLLS):
@@ -1330,9 +1319,8 @@ class DictToNcfWriter(object):
                 ncf_total += totals[sp] / fraction
 
             in_total = in_totals[poll] if poll in in_totals else 0.0
-            scaled_total = scaled_totals[poll] if poll in scaled_totals else 0.0
             if in_total + ncf_total > 0.0:
-                fout.write(poll + ',' + str(in_total) + ',' + str(scaled_total) + ',' + str(ncf_total) + '\n')
+                fout.write(poll + ',' + str(in_total) + ',' + str(ncf_total) + '\n')
 
         fout.close()
 
