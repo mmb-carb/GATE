@@ -33,8 +33,6 @@ LAND_ANGLES = [radians(2.5), radians(3), radians(3.5)]
 RUNWAY_FILE = 'input/default/runway_info_cali.csv'
 FLIGHT_FRACTS_FILE = 'input/default/flight_stage_fractions_20161004.csv'
 ## EMISSIONS INFO
-EICS = [81080011400000, 81080211400000, 81080411400000, 81080611400000, 81080814000000,
-        81080814300000, 81081014000000, 81081014500000, 81081214000000, 81081214500000]
 AREA_FILES = ['input/emis/st_4k.ar.v0001.810.2012.2012.rf2095_snp20160627.SMOKEv4p0..ff10']
 POINT_FILES = ['input/emis/st_4k.ps.v0001.810.2012.2012.rf2095_snp20160627.SMOKEv4p0.EIC14.ff10.csv']
 GAI_CODES_FILE = 'input/default/gai_codes.py'
@@ -53,6 +51,12 @@ WEIGHT_FILE = 'input/ncf/molecular.weights.txt'
 OUT_DIR = 'output/'
 SHOULD_ZIP = True
 PRINT_TOTALS = False
+## EMISSIONS CATEGORIES
+EICS = [81080011400000, 81080211400000, 81080411400000, 81080611400000, 81080814000000,
+        81080814300000, 81081014000000, 81081014500000, 81081214000000, 81081214500000]
+SCCS = {27501015: 81080814300000, 27502011: 81081014500000, 27505001: 81080411400000,
+        27505011: 81081214500000, 27601015: 81080814300000, 27602011: 81081014500000,
+        2275001000: 81080814000000}
 
 
 def main():
@@ -64,7 +68,7 @@ def main():
               'ABL_METERS': ABL_METERS, 'REGION_BOX_FILE': REGION_BOX_FILE,
               'TAKEOFF_ANGLES': TAKEOFF_ANGLES, 'LAND_ANGLES': LAND_ANGLES,
               'RUNWAY_FILE': RUNWAY_FILE, 'FLIGHT_FRACTS_FILE': FLIGHT_FRACTS_FILE,
-              'EICS': EICS, 'AREA_FILES': AREA_FILES, 'POINT_FILES': POINT_FILES,
+              'EICS': EICS, 'SCCS': SCCS, 'AREA_FILES': AREA_FILES, 'POINT_FILES': POINT_FILES,
               'GAI_CODES_FILE': GAI_CODES_FILE, 'FACILITY_ID_FILE': FACILITY_ID_FILE,
               'SMOKE_AREA_FILE': SMOKE_AREA_FILE, 'SMOKE_PNT_FILE': SMOKE_PNT_FILE,
               'SMOKE_PROF_FILE': SMOKE_PROF_FILE, 'VERSION': VERSION, 'GSPRO_FILE': GSPRO_FILE,
@@ -90,6 +94,8 @@ def main():
                         config[flag] = [sub_type(v) for v in value.split(',')]
                 elif typ == bool:
                     config[flag] = True if value in ['True', 'true', 'TRUE', True, 1] else False
+                elif typ == dict:
+                    config[flag] = eval(value)
                 else:
                     config[flag] = typ(value)
         else:
@@ -226,6 +232,7 @@ class EmissionsReader(object):
         self.area_files = config['AREA_FILES']
         self.point_files = config['POINT_FILES']
         self.eics = config['EICS']
+        self.sccs = config['SCCS']
         self.regions = config['REGIONS']
         self.gai_codes = eval(open(config['GAI_CODES_FILE'], 'r').read())
         self.facility_ids = eval(open(config['FACILITY_ID_FILE'], 'r').read())
@@ -270,7 +277,10 @@ class EmissionsReader(object):
             region = self.gai_codes[ln[0] + ln[1] + ln[2]]
             if region not in self.regions: continue
             eic = int(ln[5])
-            if eic not in self.eics: continue
+            if eic not in self.eics:
+                if eic not in self.sccs:
+                    continue
+                eic = self.sccs[eic]
             pollutant = ln[7].upper()
             emis = float(ln[8]) / 365.0  # convert from annual to daily
 
@@ -337,7 +347,10 @@ class EmissionsReader(object):
             region = facility['gai']
             if region not in self.regions: continue
             eic = int(ln[11])
-            if eic not in self.eics: continue
+            if eic not in self.eics:
+                if eic not in self.sccs:
+                    continue
+                eic = self.sccs[eic]
             poll = ln[12].upper()
             emis = float(ln[13]) / 365.0  # convert from annual to daily
             airport = facility['faa_lid']
@@ -1115,7 +1128,6 @@ class EmissionsScaler(object):
 
 class DictToNcfWriter(object):
 
-    KG_2_TON = 0.00110231131092
     STONS_HR_2_G_SEC = 251.99583333333334
     POLLS = ['CO', 'NH3', 'NOX', 'SOX', 'PM', 'TOG']
 
@@ -1319,8 +1331,7 @@ class DictToNcfWriter(object):
                     fraction *= self.groups[poll]['weights'][ind] / self.groups[poll]['weights'][so2_ind]
                 ncf_total += totals[sp] / fraction
 
-            in_total = in_totals[poll] * self.KG_2_TON if poll in in_totals else 0.0
-            ncf_total *= self.KG_2_TON
+            in_total = in_totals[poll] if poll in in_totals else 0.0
             if in_total + ncf_total > 0.0:
                 fout.write(poll + ',' + str(in_total) + ',' + str(ncf_total) + '\n')
 
