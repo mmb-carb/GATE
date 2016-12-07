@@ -79,7 +79,7 @@
  79: {'lat': (141, 165), 'lon': (66, 135)},
  80: {'lat': (156, 168), 'lon': (66, 131)},
  81: {'lat': (162, 180), 'lon': (59, 130)},
- 82: {'lat': (111, 222), 'lon': (111, 222)},                # {'lat': (JCELL), 'lon': (ICELL)},    # TODO: TESTING! FAKE DATA!
+ 82: {'lat': (1, 3), 'lon': (1, 3)},                # TODO: This is fake data, for an unused region.
  83: {'lat': (188, 228), 'lon': (44, 109)},
  84: {'lat': (220, 267), 'lon': (40, 102)},
  85: {'lat': (161, 284), 'lon': (46, 101)},
@@ -96,7 +96,7 @@
  96: {'lat': (141, 165), 'lon': (102, 135)},
  97: {'lat': (50, 92), 'lon': (150, 199)},
  98: {'lat': (133, 147), 'lon': (116, 141)},
- 99: {'lat': (111, 222), 'lon': (111, 222)},                # {'lat': (JCELL), 'lon': (ICELL)},    # TODO: TESTING! FAKE DATA!
+ 99: {'lat': (1, 3), 'lon': (1, 3)},                # TODO: This is fake data, for an unused region.
  100: {'lat': (175, 193), 'lon': (91, 119)},
  101: {'lat': (26, 73), 'lon': (159, 211)},
  102: {'lat': (260, 285), 'lon': (46, 91)},
@@ -112,6 +112,6 @@
  112: {'lat': (139, 162), 'lon': (66, 124)},
  113: {'lat': (51, 91), 'lon': (107, 167)},
  114: {'lat': (133, 147), 'lon': (71, 129)},
- 115: {'lat': (111, 222), 'lon': (111, 222)},               # {'lat': (JCELL), 'lon': (ICELL)},    # TODO: TESTING! FAKE DATA!
+ 115: {'lat': (1, 3), 'lon': (1, 3)},               # TODO: This is fake data, for an unused region.
  116: {'lat': (174, 193), 'lon': (56, 108)},
  117: {'lat': (8, 59), 'lon': (121, 191)}}
