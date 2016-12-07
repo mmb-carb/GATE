@@ -16,7 +16,7 @@ DATES = ['2012-07-18', '...', '2012-07-24']
 DATE_FORMAT = '%Y-%m-%d'
 THREE_DAY_MONTH = False
 BASE_YEAR = 2012
-REGIONS = range(1, 118)  # TODO: What about OCS?
+REGIONS = range(1, 118)
 NUM_PROCS = 2
 ## GRID INFO
 GRID_DOT_FILE = 'input/grid/GRIDDOT2D.Cali_4km_321x291'
@@ -698,20 +698,23 @@ class SpatialSurrogateBuilder(object):
         ''' Test print method to inspect spatial surrogates
         '''
         print('\nSpatial Surrogates (Just for testing purposes)\n')
-        # color scheme
+        # configurables: what to plot
+        AIRPORT = "SFO"
+        POLLUTANTS = ['CO', 'NOX', 'PM']
+        EIC = 81080011400000
+        # configurables: color scheme
         bounds = [0.0001, 0.001, 0.01, 0.025, 0.05, 0.06, 0.08, 0.1, 1.0]
         COLOR_SCHEME = ['#FF99FF', '#AA54FF', '#0000FF', '#0080FF',  # Rainbow: Red to Purple
                         '#58FAF4', '#00FF00', '#FFFF00', '#FF8000', '#FF0000']
 
         # print with colors
         for region, airports in self.surrogates.iteritems():
-            if region != 59: continue
             for airport, eic_data in airports.iteritems():
-                if airport != 'LAX': continue
+                if airport != AIRPORT: continue
                 for eic, poll_data in eic_data.iteritems():
-                    if eic != 81080011400000: continue
+                    if eic != EIC: continue
                     for poll, surr_data in poll_data.iteritems():
-                        if poll not in ['CO', 'NOX', 'PM']: continue
+                        if poll not in POLLUTANTS: continue
                         s = {}
                         for key,value in surr_data.iteritems():
                             for i in xrange(len(COLOR_SCHEME)):
