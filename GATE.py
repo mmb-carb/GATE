@@ -16,7 +16,7 @@ DATES = ['2012-07-18', '...', '2012-07-24']
 DATE_FORMAT = '%Y-%m-%d'
 THREE_DAY_MONTH = False
 BASE_YEAR = 2012
-REGIONS = range(1, 70)
+REGIONS = range(1, 118)  # TODO: What about OCS?
 NUM_PROCS = 2
 ## GRID INFO
 GRID_DOT_FILE = 'input/grid/GRIDDOT2D.Cali_4km_321x291'
@@ -30,9 +30,10 @@ REGION_BOX_FILE = 'input/default/region_boxes.py'
 ## FLIGHT PATH INFO
 TAKEOFF_ANGLES = [radians(10), radians(20), radians(30)]
 LAND_ANGLES = [radians(2.5), radians(3), radians(3.5)]
-RUNWAY_FILE = 'input/default/runway_info_cali.csv'
+RUNWAY_FILE = 'input/default/runway_info_cali.csv'      # TODO: Combine facility_ids and runway_info...
 FLIGHT_FRACTS_FILE = 'input/default/flight_stage_fractions_20161004.csv'
 ## EMISSIONS INFO
+CATEGORIES_FILE = 'input/default/aircraft_categories.py'
 AREA_FILES = ['input/emis/st_4k.ar.v0001.810.2012.2012.rf2095_snp20160627.SMOKEv4p0..ff10']
 POINT_FILES = ['input/emis/st_4k.ps.v0001.810.2012.2012.rf2095_snp20160627.SMOKEv4p0.EIC14.ff10.csv']
 GAI_CODES_FILE = 'input/default/gai_codes.py'
@@ -51,12 +52,6 @@ WEIGHT_FILE = 'input/ncf/molecular.weights.txt'
 OUT_DIR = 'output/'
 SHOULD_ZIP = True
 PRINT_TOTALS = False
-## EMISSIONS CATEGORIES
-EICS = [81080011400000, 81080211400000, 81080411400000, 81080611400000, 81080814000000,
-        81080814300000, 81081014000000, 81081014500000, 81081214000000, 81081214500000]
-SCCS = {27501015: 81080814300000, 27502011: 81081014500000, 27505001: 81080411400000,
-        27505011: 81081214500000, 27601015: 81080814300000, 27602011: 81081014500000,
-        2275001000: 81080814000000}
 
 
 def main():
@@ -68,12 +63,13 @@ def main():
               'ABL_METERS': ABL_METERS, 'REGION_BOX_FILE': REGION_BOX_FILE,
               'TAKEOFF_ANGLES': TAKEOFF_ANGLES, 'LAND_ANGLES': LAND_ANGLES,
               'RUNWAY_FILE': RUNWAY_FILE, 'FLIGHT_FRACTS_FILE': FLIGHT_FRACTS_FILE,
-              'EICS': EICS, 'SCCS': SCCS, 'AREA_FILES': AREA_FILES, 'POINT_FILES': POINT_FILES,
-              'GAI_CODES_FILE': GAI_CODES_FILE, 'FACILITY_ID_FILE': FACILITY_ID_FILE,
-              'SMOKE_AREA_FILE': SMOKE_AREA_FILE, 'SMOKE_PNT_FILE': SMOKE_PNT_FILE,
-              'SMOKE_PROF_FILE': SMOKE_PROF_FILE, 'VERSION': VERSION, 'GSPRO_FILE': GSPRO_FILE,
-              'GSREF_FILE': GSREF_FILE, 'WEIGHT_FILE': WEIGHT_FILE, 'OUT_DIR': OUT_DIR,
-              'SHOULD_ZIP': SHOULD_ZIP, 'PRINT_TOTALS': PRINT_TOTALS}
+              'CATEGORIES_FILE': CATEGORIES_FILE, 'AREA_FILES': AREA_FILES,
+              'POINT_FILES': POINT_FILES, 'GAI_CODES_FILE': GAI_CODES_FILE,
+              'FACILITY_ID_FILE': FACILITY_ID_FILE, 'SMOKE_AREA_FILE': SMOKE_AREA_FILE,
+              'SMOKE_PNT_FILE': SMOKE_PNT_FILE, 'SMOKE_PROF_FILE': SMOKE_PROF_FILE,
+              'VERSION': VERSION, 'GSPRO_FILE': GSPRO_FILE, 'GSREF_FILE': GSREF_FILE,
+              'WEIGHT_FILE': WEIGHT_FILE, 'OUT_DIR': OUT_DIR, 'SHOULD_ZIP': SHOULD_ZIP,
+              'PRINT_TOTALS': PRINT_TOTALS}
 
     # parse command-line
     a = 1
@@ -110,7 +106,7 @@ def main():
 
 class GATE(object):
 
-    GATE_VERSION = '0.2.5'
+    GATE_VERSION = '0.2.6'
 
     def __init__(self, config):
         ''' build  each step of the model '''
@@ -231,8 +227,10 @@ class EmissionsReader(object):
     def __init__(self, config):
         self.area_files = config['AREA_FILES']
         self.point_files = config['POINT_FILES']
-        self.eics = config['EICS']
-        self.sccs = config['SCCS']
+        cats = eval(open(config['CATEGORIES_FILE']).read())
+        self.eics = cats['eics']
+        self.scc2eic = cats['scc2eic']
+        self.helicopter_sccs = cats['helicopter_sccs']
         self.regions = config['REGIONS']
         self.gai_codes = eval(open(config['GAI_CODES_FILE'], 'r').read())
         self.facility_ids = eval(open(config['FACILITY_ID_FILE'], 'r').read())
@@ -278,9 +276,9 @@ class EmissionsReader(object):
             if region not in self.regions: continue
             eic = int(ln[5])
             if eic not in self.eics:
-                if eic not in self.sccs:
+                if eic not in self.scc2eic:
                     continue
-                eic = self.sccs[eic]
+                eic = self.scc2eic[eic]
             pollutant = ln[7].upper()
             emis = float(ln[8]) / 365.0  # convert from annual to daily
 
@@ -348,22 +346,22 @@ class EmissionsReader(object):
             if region not in self.regions: continue
             eic = int(ln[11])
             if eic not in self.eics:
-                if eic not in self.sccs:
+                if eic not in self.scc2eic:
                     continue
-                eic = self.sccs[eic]
+                eic = self.scc2eic[eic]
             poll = ln[12].upper()
             emis = float(ln[13]) / 365.0  # convert from annual to daily
-            airport = facility['faa_lid']
+            location = facility['faa_lid']
 
             if region not in self.airport_emis:
                 self.airport_emis[region] = {}
-            if airport not in self.airport_emis[region]:
-                self.airport_emis[region][airport] = {}
-            if eic not in self.airport_emis[region][airport]:
-                self.airport_emis[region][airport][eic] = {}
-            if poll not in self.airport_emis[region][airport][eic]:
-                self.airport_emis[region][airport][eic][poll] = 0.0
-            self.airport_emis[region][airport][eic][poll] += emis
+            if location not in self.airport_emis[region]:
+                self.airport_emis[region][location] = {}
+            if eic not in self.airport_emis[region][location]:
+                self.airport_emis[region][location][eic] = {}
+            if poll not in self.airport_emis[region][location][eic]:
+                self.airport_emis[region][location][eic][poll] = 0.0
+            self.airport_emis[region][location][eic][poll] += emis
 
         if facs_not_found:
             print('\t\tThese facility IDs were not found. Their emissions will be dropped:\n\t\t' +
@@ -381,7 +379,8 @@ class TemporalSurrogateBuilder(object):
         self.smoke_area_file = config['SMOKE_AREA_FILE']
         self.smoke_point_file = config['SMOKE_PNT_FILE']
         self.smoke_profile_file = config['SMOKE_PROF_FILE']
-        self.eics = config['EICS']
+        cats = eval(open(config['CATEGORIES_FILE']).read())
+        self.eics = cats['eics']
         self.regions = config['REGIONS']
         self.gai_codes = eval(open(config['GAI_CODES_FILE'], 'r').read())
         self.temp_profs = self._default_profiles()
@@ -592,61 +591,91 @@ class SpatialSurrogateBuilder(object):
         if regions:
             self.regions = regions
 
-        land_scalar = 1.0 / float(len(self.landing_angles))
-        toff_scalar = 1.0 / float(len(self.takoff_angles))
-
         # build spatial surrogates
         for region in self.regions:
             if region not in self.airports:
                 print('\t\tNo airports given for region #' + str(region) + '. Skipping.')
                 continue
-            for airport, airport_data in self.airports[region].iteritems():
-                if airport not in self.surrogates[region]:
-                    self.surrogates[region][airport] = {}
+            for location, location_data in self.airports[region].iteritems():
+                if location not in self.surrogates[region]:
+                    self.surrogates[region][location] = {}
 
-                for lat0, lon0, lat1, lon1 in airport_data['runways']:
-                    # memoize the grid cell of both ends of the runway
-                    cell0 = tuple(self.find_grid_cell((0.0, lon0, lat0), region))
-                    cell1 = tuple(self.find_grid_cell((0.0, lon1, lat1), region))
-
-                    # landing
-                    land = {}
-                    for angle in self.landing_angles:
-                        self.add_dict(land, self._gen_surrogate_1runway(region, lat0, lon0, lat1, lon1, angle, cell0))
-                    self.scale_dict(land, land_scalar)
-
-                    # take-off
-                    toff = {}
-                    for angle in self.takoff_angles:
-                        self.add_dict(toff, self._gen_surrogate_1runway(region, lat1, lon1, lat0, lon0, angle, cell1))
-                    self.scale_dict(toff, toff_scalar)
-
-                    # taxi-ing
-                    if cell0 != cell1:
-                        taxi = {cell0: 0.5, cell1: 0.5}
-                    else:
-                        taxi = {cell0: 1.0}
-
-                    # fill surrogates by eic and pollutant
-                    for eic, poll_fracts in self.flight_fracts.iteritems():
-                        if eic not in self.surrogates[region][airport]:
-                            self.surrogates[region][airport][eic] = {}
-                        for poll, fractions in poll_fracts.iteritems():
-                            # copy surrogates, so they can be reused
-                            surr = land.copy()
-                            taxi1 = taxi.copy()
-                            toff1 = toff.copy()
-                            # scale surrogate by flight phase fractions
-                            self.scale_dict(surr, fractions['landing'])
-                            self.scale_dict(taxi1, fractions['taxiing'])
-                            self.scale_dict(toff1, fractions['takeoff'])
-                            # sum three flight phase surrogates together
-                            self.add_dict(surr, taxi1)
-                            self.add_dict(surr, toff1)
-                            # add to final spatial surrogate collection
-                            self.surrogates[region][airport][eic][poll] = surr
+                # build a spatial surrogate for a single location
+                if location_data['helipads']:
+                    self._build_helipad(location, location_data['helipads'], region)
+                if location_data['runways']:
+                    self._build_airport(location, location_data['runways'], region)
 
         return self.surrogates
+
+    def _build_airport(self, airport, runway_data, region):
+        ''' Build a spatial surrogate for airplanes taking off from an airport
+            with, potentiall, multiple runways.
+        '''
+        land_scalar = 1.0 / float(len(self.landing_angles))
+        toff_scalar = 1.0 / float(len(self.takoff_angles))
+
+        for lat0, lon0, lat1, lon1 in runway_data:
+            # memoize the grid cell of both ends of the runway
+            cell0 = tuple(self.find_grid_cell((0.0, lon0, lat0), region))
+            cell1 = tuple(self.find_grid_cell((0.0, lon1, lat1), region))
+
+            # landing
+            land = {}
+            for angle in self.landing_angles:
+                self.add_dict(land, self._gen_surrogate_1runway(region, lat0, lon0, lat1, lon1, angle, cell0))
+            self.scale_dict(land, land_scalar)
+
+            # take-off
+            toff = {}
+            for angle in self.takoff_angles:
+                self.add_dict(toff, self._gen_surrogate_1runway(region, lat1, lon1, lat0, lon0, angle, cell1))
+            self.scale_dict(toff, toff_scalar)
+
+            # taxi-ing
+            if cell0 != cell1:
+                taxi = {cell0: 0.5, cell1: 0.5}
+            else:
+                taxi = {cell0: 1.0}
+
+            # fill surrogates by eic and pollutant
+            for eic, poll_fracts in self.flight_fracts.iteritems():
+                if eic not in self.surrogates[region][airport]:
+                    self.surrogates[region][airport][eic] = {}
+                for poll, fractions in poll_fracts.iteritems():
+                    # copy surrogates, so they can be reused
+                    surr = land.copy()
+                    taxi1 = taxi.copy()
+                    toff1 = toff.copy()
+                    # scale surrogate by flight phase fractions
+                    self.scale_dict(surr, fractions['landing'])
+                    self.scale_dict(taxi1, fractions['taxiing'])
+                    self.scale_dict(toff1, fractions['takeoff'])
+                    # sum three flight phase surrogates together
+                    self.add_dict(surr, taxi1)
+                    self.add_dict(surr, toff1)
+                    # add to final spatial surrogate collection
+                    self.surrogates[region][airport][eic][poll] = surr
+
+    def _build_helipad(self, loc, helipads, region):
+        ''' Build a spatial surrogate for a single helipad.
+            NOTE: This is a default, single vertical column, to be improved.
+        '''
+        for helipad in helipads:
+            # build default helipad spatial surrogate
+            num_levels = 5
+            cell0 = tuple(self.find_grid_cell((0.0, helipad[1], helipad[0]), region))
+            helicopter_surr = {cell0: 1.0 / num_levels}
+            for i in xrange(1, num_levels):
+                cell_new = (i, cell0[1], cell0[2])
+                helicopter_surr = {cell_new: 1.0 / num_levels}
+
+            # fill surrogates by eic and pollutant
+            for eic, poll_fracts in self.flight_fracts.iteritems():
+                if eic not in self.surrogates[region][loc]:
+                    self.surrogates[region][loc][eic] = {}
+                for poll in poll_fracts.iterkeys():
+                    self.surrogates[region][loc][eic][poll] = helicopter_surr.copy()
 
     @staticmethod
     def add_dict(orig, new):
@@ -1062,16 +1091,23 @@ class SpatialSurrogateBuilder(object):
             flights = int(float(ln[flights_col]))
             land_lat = float(ln[landlat_col])
             land_lon = float(ln[landlon_col])
-            take_lat = float(ln[takelat_col])
-            take_lon = float(ln[takelon_col])
+            if ln[takelat_col] == 'H':
+                is_helipad = True
+            else:
+                is_helipad = False
+                take_lat = float(ln[takelat_col])
+                take_lon = float(ln[takelon_col])
 
             # fill output dict
             if region not in airports:
                 airports[region] = {}
             if airport not in airports[region]:
-                airports[region][airport] = {'flights': 0, 'runways': []}
+                airports[region][airport] = {'flights': 0, 'runways': [], 'helipads': []}
             airports[region][airport]['flights'] += flights
-            airports[region][airport]['runways'].append((land_lat, land_lon, take_lat, take_lon))
+            if not is_helipad:
+                airports[region][airport]['runways'].append((land_lat, land_lon, take_lat, take_lon))
+            else:
+                airports[region][airport]['helipads'].append((land_lat, land_lon))
 
         return airports
 
@@ -1114,6 +1150,7 @@ class EmissionsScaler(object):
                             continue
 
                         for poll, val in polls.iteritems():
+
                             if poll not in scaled_emis[eic][hr]:
                                 scaled_emis[eic][hr][poll] = {}
                             val0 = val * fraction_hr
@@ -1133,7 +1170,8 @@ class DictToNcfWriter(object):
 
     def __init__(self, config):
         self.directory = config['OUT_DIR']
-        self.eics = config['EICS']
+        cats = eval(open(config['CATEGORIES_FILE']).read())
+        self.eics = cats['eics']
         self.nrows = config['NROWS']
         self.ncols = config['NCOLS']
         self.nlayers = config['NUM_NONZERO_LAYERS']
