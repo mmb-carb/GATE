@@ -41,7 +41,7 @@ Of course, this will only run the model with the default settings, as appear in 
     GAI_CODES_FILE = 'input/default/gai_codes.py'
     FACILITY_ID_FILE = 'input/default/facility_ids.py'
 
-    ## TEMPORAL INFO
+    ## TEMPORAL INFO (This section may be removed.)
     SMOKE_AREA_FILE = 'input/temporal/ATREF_pro2012_snp20160627_smk4.csv'  # TODO: Remove?
     SMOKE_PNT_FILE = 'input/temporal/PTREF_pro2012_snp20160627_smk4.csv'
     SMOKE_PROF_FILE = 'input/temporal/ARPTPRO_pro2012_snp20160627_smk3_smk4.csv'

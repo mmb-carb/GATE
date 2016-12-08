@@ -30,7 +30,7 @@ REGION_BOX_FILE = 'input/default/region_boxes.py'
 ## FLIGHT PATH INFO
 TAKEOFF_ANGLES = [radians(10), radians(20), radians(30)]
 LAND_ANGLES = [radians(2.5), radians(3), radians(3.5)]
-RUNWAY_FILE = 'input/default/runway_info_cali.csv'      # TODO: Combine facility_ids and runway_info...
+RUNWAY_FILE = 'input/default/runway_info_cali.csv'
 FLIGHT_FRACTS_FILE = 'input/default/flight_stage_fractions_20161004.csv'
 ## EMISSIONS INFO
 CATEGORIES_FILE = 'input/default/aircraft_categories.py'
