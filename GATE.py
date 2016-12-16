@@ -39,11 +39,7 @@ POINT_FILES = ['input/emis/st_4k.ps.v0001.810.2012.2012.rf2095_snp20160627.SMOKE
 GAI_CODES_FILE = 'input/default/gai_codes.py'
 FACILITY_ID_FILE = 'input/default/facility_ids.py'
 ## TEMPORAL INFO
-#### TODO: Should we can remove all of these, since we have real data to work with?
-#### TODO: Or should we just move the default temporal profiles to the SMOKE format?
-SMOKE_AREA_FILE = 'input/temporal/ATREF_pro2012_snp20160627_smk4.csv'
-SMOKE_PNT_FILE = 'input/temporal/PTREF_pro2012_snp20160627_smk4.csv'
-SMOKE_PROF_FILE = 'input/temporal/ARPTPRO_pro2012_snp20160627_smk3_smk4.csv'
+TEMPORAL_FILE = 'input/temporal/aircraft_temporal_profiles_2002-2015_v1.csv'
 ## OUTPUT INFO
 VERSION = 'v0100'
 GSPRO_FILE = 'input/ncf/gspro.cmaq.saprc.31dec2015.all.csv'
@@ -65,8 +61,7 @@ def main():
               'RUNWAY_FILE': RUNWAY_FILE, 'FLIGHT_FRACTS_FILE': FLIGHT_FRACTS_FILE,
               'CATEGORIES_FILE': CATEGORIES_FILE, 'AREA_FILES': AREA_FILES,
               'POINT_FILES': POINT_FILES, 'GAI_CODES_FILE': GAI_CODES_FILE,
-              'FACILITY_ID_FILE': FACILITY_ID_FILE, 'SMOKE_AREA_FILE': SMOKE_AREA_FILE,
-              'SMOKE_PNT_FILE': SMOKE_PNT_FILE, 'SMOKE_PROF_FILE': SMOKE_PROF_FILE,
+              'FACILITY_ID_FILE': FACILITY_ID_FILE, 'TEMPORAL_FILE': TEMPORAL_FILE,
               'VERSION': VERSION, 'GSPRO_FILE': GSPRO_FILE, 'GSREF_FILE': GSREF_FILE,
               'WEIGHT_FILE': WEIGHT_FILE, 'OUT_DIR': OUT_DIR, 'SHOULD_ZIP': SHOULD_ZIP,
               'PRINT_TOTALS': PRINT_TOTALS}
@@ -106,7 +101,7 @@ def main():
 
 class GATE(object):
 
-    GATE_VERSION = '0.2.6'
+    GATE_VERSION = '0.2.7'
 
     def __init__(self, config):
         ''' build  each step of the model '''
@@ -372,18 +367,19 @@ class EmissionsReader(object):
 
 class TemporalSurrogateBuilder(object):
 
+    DEFAULT = -1
+
     def __init__(self, config):
         self.base_year = int(config['BASE_YEAR'])
         self.date_format = config['DATE_FORMAT']
         self.dates = [datetime.strptime(d, self.date_format) for d in sorted(set(config['DATES']))]
-        self.smoke_area_file = config['SMOKE_AREA_FILE']
-        self.smoke_point_file = config['SMOKE_PNT_FILE']
-        self.smoke_profile_file = config['SMOKE_PROF_FILE']
         cats = eval(open(config['CATEGORIES_FILE']).read())
         self.eics = cats['eics']
         self.regions = config['REGIONS']
         self.gai_codes = eval(open(config['GAI_CODES_FILE'], 'r').read())
-        self.temp_profs = self._default_profiles()
+        self.temp_file = config['TEMPORAL_FILE']
+        self.file_profs = self._read_temp_file()
+        self.temp_profs = {}
 
     def build(self, regions=False):
         ''' read temporal profile dict by: region (w/ default), month, DOW, and hour
@@ -393,169 +389,147 @@ class TemporalSurrogateBuilder(object):
         if regions:
             self.regions = regions
 
-        #profiles = self._read_profiles_file()
-        #self._read_area_file(profiles)
-        #self._read_point_file(profiles)
-
         return self._build_daily_profiles()
 
     def _build_daily_profiles(self):
         ''' generate the final daily, regional, and hourly profiles,
             after combining the monthly, weekly, and diurnal profiles.
         '''
-        profs = {}
-
+        self.temp_profs = {}
         # create a full set of scaling factors for each date
         for d in self.dates:
             d_str = datetime.strftime(d, self.date_format)
-            profs[d_str] = {}
+            self.temp_profs[d_str] = {}
             dow = datetime(self.base_year, d.month, d.day).weekday()
             month = d.month - 1
             # create temporal factors for each region
             for region in self.regions:
-                profs[d_str][region] = {}
-                # and each airport, individually (-1 is default airport code)
-                for airport in self.temp_profs[region]:
-                    # monthly scaling factor
-                    if 'monthly' in self.temp_profs[region][airport]:
-                        factor_month = self.temp_profs[region][airport]['monthly'][month]
-                    else:
-                        factor_month = self.temp_profs[region][-1]['monthly'][month]
-
-                    # dow scaling factor
-                    if 'weekly' in self.temp_profs[region][airport]:
-                        factor_dow = self.temp_profs[region][airport]['weekly'][dow]
-                    else:
-                        factor_dow = self.temp_profs[region][-1]['weekly'][dow]
-
-                    # 24-hr diurnal scaling factors
-                    if dow < 5:
-                        if 'duirnal_weekday' in self.temp_profs[region][airport]:
-                            factors_diurnal = self.temp_profs[region][airport]['duirnal_weekday']
+                self.temp_profs[d_str][region] = {}
+                # and each airport, individually
+                for airport in self.file_profs[region]:
+                    if airport not in self.temp_profs[d_str][region]:
+                        self.temp_profs[d_str][region][airport] = {}
+                    for eic in self.eics:
+                        def_eic = eic if eic in self.file_profs[region][airport] else self.DEFAULT
+                        # check if default has already been included
+                        if def_eic not in self.temp_profs[d_str][region][airport]:
+                            self.temp_profs[d_str][region][airport][def_eic] = {}
                         else:
-                            factors_diurnal = self.temp_profs[region][-1]['duirnal_weekday']
-                    else:
-                        if 'duirnal_weekend' in self.temp_profs[region][airport]:
-                            factors_diurnal = self.temp_profs[region][airport]['duirnal_weekend']
+                            continue
+
+                        # monthly scaling factor
+                        if 'monthly' in self.file_profs[region][airport][def_eic]:
+                            factor_month = self.file_profs[region][airport][def_eic]['monthly'][month]
                         else:
-                            factors_diurnal = self.temp_profs[region][-1]['duirnal_weekend']
+                            factor_month = self.file_profs[region][self.DEFAULT][def_eic]['monthly'][month]
 
-                    # combine scaling factors to a resultant 24-hr cycle
-                    profs[d_str][region][airport] = [f * factor_month * factor_dow for f in factors_diurnal]
+                        # dow scaling factor
+                        if 'weekly' in self.file_profs[region][airport][def_eic]:
+                            factor_dow = self.file_profs[region][airport][def_eic]['weekly'][dow]
+                        else:
+                            factor_dow = self.file_profs[region][self.DEFAULT][def_eic]['weekly'][dow]
 
-        return profs
+                        # 24-hr diurnal scaling factors
+                        if dow < 5:
+                            if 'duirnal_weekday' in self.file_profs[region][airport][def_eic]:
+                                factors_diurnal = self.file_profs[region][airport][def_eic]['duirnal_weekday']
+                            else:
+                                factors_diurnal = self.file_profs[region][self.DEFAULT][def_eic]['duirnal_weekday']
+                        else:
+                            if 'duirnal_weekend' in self.file_profs[region][airport][def_eic]:
+                                factors_diurnal = self.file_profs[region][airport][def_eic]['duirnal_weekend']
+                            else:
+                                factors_diurnal = self.file_profs[region][self.DEFAULT][def_eic]['duirnal_weekend']
 
-    def _default_profiles(self):
-        ''' Build the default temporal profiles for all regions.
-            (BoTS = Beauro of Transportation Statistics)
-            Monthly: found using BoTS 2002-2015 California flight data
-            Weekly:  found using BoTS 2002-2015 California flight data
-            Diurnal: found using official Delta, United, and Continental flight schedules
+                        # combine scaling factors to a resultant 24-hr cycle
+                        self.temp_profs[d_str][region][airport][def_eic] = [f * factor_month * factor_dow for f in factors_diurnal]
+
+        return self.temp_profs
+
+    def _read_temp_file(self):
+        ''' Read the custom GATE temporal profile file.
+            NOTE: It is up to the creator of this file to ensure either:
+            a) a full set of data, or
+            b) a full set of data defaults
+            region,airport,eic,type,fractions|
+            default,default,default,monthly,0.962509|0.974175|0.989383|0.994767|...
+            default,default,default,weekly,1.03601|1.017904|1.025875|1.015781|...
         '''
-        profiles = {}
+        # rearrange file above into usable data, taking care of defaults appropriately
+        profiles = {r: {} for r in self.regions}
 
-        for r in self.regions:
-            # lay out profile dict
-            profiles[r] = {}
-            profiles[r][-1] = {}
+        default = 'default'
+        sep = '|'
+        options = {'monthly': 12, 'weekly': 7, 'duirnal_weekday': 24, 'duirnal_weekend': 24}
 
-            # values for default airports
-            profiles[r][-1]['monthly'] = [0.962509, 0.974175, 0.989383, 0.994767, 0.999752, 1.044149,
-                                          1.052232, 1.047054, 0.993166, 0.995045, 0.972044, 0.975724]
-            profiles[r][-1]['weekly'] = [1.036010, 1.017904, 1.025875, 1.015781, 1.037507, 0.879417, 0.987506]
-            profiles[r][-1]['duirnal_weekday'] = [0.0070112959768515943, 0.0018641144065438763,
-                8.3467809248233263e-05, 0.00011129041233097768, 0.0008346780924823326,
-                0.011407267263925212, 0.033136720271548604, 0.040565355294641364,
-                0.056396416448722946, 0.057481497968949975, 0.060625452117300097,
-                0.065299649435201154, 0.064325858327305099, 0.065911746703021537,
-                0.063602470647153742, 0.064520616548884316, 0.067191586444827783,
-                0.06129319459128596, 0.053614156140448503, 0.060569806911134609,
-                0.048689555394802735, 0.048550442379389012, 0.039869790217572754,
-                0.027043570196427578]
-            profiles[r][-1]['duirnal_weekend'] = [0.0070112959768515943, 0.0018641144065438763,
-                8.3467809248233263e-05, 0.00011129041233097768, 0.0008346780924823326,
-                0.011407267263925212, 0.033136720271548604, 0.040565355294641364,
-                0.056396416448722946, 0.057481497968949975, 0.060625452117300097,
-                0.065299649435201154, 0.064325858327305099, 0.065911746703021537,
-                0.063602470647153742, 0.064520616548884316, 0.067191586444827783,
-                0.06129319459128596, 0.053614156140448503, 0.060569806911134609,
-                0.048689555394802735, 0.048550442379389012, 0.039869790217572754,
-                0.027043570196427578]
+        # read file header to get column separator
+        f = open(self.temp_file, 'r')
+        last_col = f.readline().rstrip().split(',')[-1]
+        if last_col.startswith('fractions') and len(last_col) == (len('fractions') + 1):
+            sep = last_col[-1]
+
+        # parse all lines in file into dict
+        lines = [line.rstrip().lower().split(',') for line in f.readlines()]
+        data = dict((tuple(line[:4]), [float(v) for v in line[-1].split(sep)]) for line in lines)
+
+        # ignore the case: default type
+        for key in list(data.keys()):
+            if key[3] == default:
+                print('\t\tERROR: Temporal profiles can not have a default type')
+                del data[key]
+
+        # handle the case: full-default profiles
+        for typ in ['monthly', 'weekly', 'duirnal_weekday', 'duirnal_weekend']:
+            default_key = (default, default, default, typ)
+            if default_key in data:
+                for region in self.regions:
+                    if self.DEFAULT not in profiles[region]:  # default airport
+                        profiles[region][self.DEFAULT] = {}
+                    if self.DEFAULT not in profiles[region][self.DEFAULT]:  # default EIC
+                        profiles[region][self.DEFAULT][self.DEFAULT] = {}
+                    profiles[region][self.DEFAULT][self.DEFAULT][typ] = data[default_key]
+                del data[default_key]
+
+        # ignore the case: default-region but specific airport
+        for key in list(data.keys()):
+            if key[0] != default and key[1] == default:
+                print('\t\tERROR: Temporal profiles can not have default region without default airport')
+                del data[key]
+
+        # handle the case: default all-but-EIC
+        for key in list(data.keys()):
+            if key[0] == default and key[1] == default and key[2] != default:
+                for region in self.regions:
+                    if key[2] not in profiles[region][self.DEFAULT]:
+                        profiles[region][self.DEFAULT][key[2]] = {}
+                    profiles[region][self.DEFAULT][key[2]][key[3]] =  data[key]
+                del data[key]
+
+        # handle the case: specific region, default EIC
+        for key in list(data.keys()):
+            if key[0] != default and key[2] == default:
+                region = int(key[0])
+                airport_code = self.DEFAULT if key[1] == default else key[1]
+                if airport_code not in profiles[region]:
+                    profiles[region][airport_code] = {}
+                for eic in self.eics:
+                    if eic not in profiles[region][airport_code]:
+                        profiles[region][airport_code][eic] = {}
+                    profiles[region][airport_code][eic][key[3]] = data[key]
+                del data[key]
+
+        # handle the case: specific region and EIC (all that is left)
+        for key in data:
+            region = int(key[0])
+            airport = self.DEFAULT if key[1] == default else key[1]
+            eic = int(key[2])
+            if airport not in profiles[region]:
+                profiles[region][airport] = {}
+            if eic not in profiles[region][airport]:
+                profiles[region][airport][eic] = {}
+            profiles[region][airport][eic][key[3]] = data[key]
 
         return profiles
-
-    def _read_profiles_file(self):
-        ''' read the SMOKE-ready ARPTPRO file to get profile codes
-            for different temporal profiles:
-            MONTHLY, WEEKLY, DIURNAL WEEKDAY, and DIURNAL WEEKEND
-        '''
-        section = 'MONTHLY'
-        profiles = {}
-        f = open(self.smoke_profile_file, 'r')
-        for line in f.xreadlines():
-            ln = line.strip()
-            # check which section of the file we're in
-            if ln.startswith('/'):
-                if 'END' in ln.upper():
-                    continue
-                else:
-                    section = ln.strip('/').replace(' ', '_')
-                    profiles[section] = {}
-                    continue
-
-            # parse line
-            prof_num = int(line[:5])
-            data = [int(v) for v in line[5:-4].strip().split()]
-            total = float(line[-4:])
-
-            if section == 'MONTHLY':
-                profiles[section][prof_num] = [12.0 * (d / total) for d in data]
-            elif section == 'WEEKLY':
-                profiles[section][prof_num] = [7.0 * (d / total) for d in data]
-            else:
-                profiles[section][prof_num] = [d / total for d in data]
-
-        f.close()
-        return profiles
-
-    def _read_area_file(self, profiles):
-        ''' Read a SMOKE-ready ATREF file to determine the temporal profiles for each region
-            File Format:
-            EIC,            monthly code, DOW code, diurnal code, pollutant, region, ...
-            81080611400000, 4218,         22,       52,           0,         0SF0060490BA,...
-            81081214000000,4219,21,37,0,0SF0060490BA,,0,,81081214000000
-        '''
-        f = open(self.smoke_area_file, 'r')
-        for line in f.xreadlines():
-            ln = line.split(',')
-            eic = int(ln[0])
-            if eic not in self.eics: continue
-            region_code = ln[5]
-            if region_code not in self.gai_codes: continue
-            region = self.gai_codes[region_code]
-            if region not in self.regions: continue
-            month_code = int(ln[1])
-            week_code = int(ln[2])
-            diurn_code = int(ln[3])
-
-            try:
-                self.temp_profs[region]['monthly'][-1] = profiles['MONTHLY'][month_code]
-                self.temp_profs[region]['weekly'][-1] = profiles['MONTHLY'][month_code]
-                self.temp_profs[region]['monthly'][-1] = profiles['MONTHLY'][month_code]
-                self.temp_profs[region]['monthly'][-1] = profiles['MONTHLY'][month_code]
-            except KeyError as e:
-                print('\t\tERROR: temporal code not found.' + e)
-
-        f.close()
-
-    def _read_point_file(self, profiles):
-        '''  A unique point source is identified by a set of coabdis, facility ID, device ID, process ID, and stack ID
-            File Format:
-            eic, monthly temporal code, day of week code, diurnal code, pollutant, coabdis,      facid,  stk, dev, proid
-            0,   3849,                  7,                81,           0,         0SC0060330SC, 145258, 4,   0,   1
-            0,3849,7,81,0,0SC0060330SC,145258,3,0,1
-        '''
-        pass
 
 
 class SpatialSurrogateBuilder(object):
@@ -1117,6 +1091,8 @@ class SpatialSurrogateBuilder(object):
 
 class EmissionsScaler(object):
 
+    DEFAULT = -1
+
     def __init__(self, config):
         pass
 
@@ -1137,13 +1113,15 @@ class EmissionsScaler(object):
 
         scaled_emis = {}
         temporal = temp_surrs[date]
+
         for region, region_emis in emis.iteritems():
 
             for airport, airport_emis in region_emis.iteritems():
                 surrs = spat_surrs[region][airport]
 
-                diurnal = temporal[region][airport] if airport in temporal[region] else temporal[region][-1]
+                diurnal_by_eic = temporal[region][airport] if airport in temporal[region] else temporal[region][self.DEFAULT]
                 for eic, polls in airport_emis.iteritems():
+                    diurnal = diurnal_by_eic[eic] if eic in diurnal_by_eic else diurnal_by_eic[self.DEFAULT]
                     if eic not in scaled_emis:
                         scaled_emis[eic] = dict((hr, {}) for hr in range(24))
 
