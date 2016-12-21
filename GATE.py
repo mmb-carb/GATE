@@ -1126,7 +1126,6 @@ class EmissionsScaler(object):
                 keys: date_string -> EIC -> hr -> poll -> grid cell -> tons/day
         '''
         print('\t\tScaling & Writing: ' + date)
-
         scaled_emis = {}
         temporal = temp_surrs[date]
 
@@ -1234,7 +1233,7 @@ class DictToNcfWriter(object):
         self._load_gsref()
         self._load_gspro()
 
-    def write(self, scaled_emis, emis, date):
+    def write(self, scaled_emis, in_emis, date):
         ''' Write a CMAQ-ready NetCDF file for a single day
         '''
         # get Julian date
@@ -1246,13 +1245,13 @@ class DictToNcfWriter(object):
         ncf, gmt_shift = self._create_netcdf(out_path, dt, jdate)
 
         # fill netcdf file with data
-        self._fill_grid(scaled_emis, emis, date, ncf, gmt_shift, out_path)
+        self._fill_grid(in_emis, scaled_emis, date, ncf, gmt_shift, out_path)
 
         # compress output file
         if self.should_zip:
             os.system('gzip -1 ' + out_path)
 
-    def _fill_grid(self, scaled_emissions, emis, date, ncf, gmt_shift, out_path):
+    def _fill_grid(self, in_emis, scaled_emissions, date, ncf, gmt_shift, out_path):
         ''' Fill the entire modeling domain with a 3D grid for each pollutant.
             Fill the emissions values in each grid cell, for each polluant.
             Create a separate grid set for each date.
@@ -1324,16 +1323,15 @@ class DictToNcfWriter(object):
                 print('\t\t\t' + str(eic))
 
         if self.print_totals:
-            self._print_totals_to_csv(ncf, emis, out_path)
+            self._print_totals_to_csv(ncf, in_emis, scaled_emissions, out_path)
 
         ncf.close()
 
-    def _print_totals_to_csv(self, ncf, emis, out_path):
+    def _print_totals_to_csv(self, ncf, emis, scaled_emis, out_path):
         ''' if requested, print a simple CSV of totals, by pollutant
             emis[region][airport][eic][poll] => tons/day
+            scaled_emis[eic][hr][poll][cell] => tons/hr
         '''
-        # TODO: Also print scaled emissions
-
         # find species position by pollutant
         species = {}
         for group in self.groups:
@@ -1358,12 +1356,22 @@ class DictToNcfWriter(object):
                             in_totals[poll] = 0.0
                         in_totals[poll] += value
 
+        # create scaled emissions totals
+        scaled_totals = {}
+        for eic_emis in scaled_emis.itervalues():
+            for hourly in eic_emis.itervalues():
+                for poll, cell_data in hourly.iteritems():
+                    for value in cell_data.itervalues():
+                        if poll not in scaled_totals:
+                            scaled_totals[poll] = 0.0
+                        scaled_totals[poll] += value
+
         # write output file
         fout = open(out_path.replace('.ncf', '.totals.csv'), 'w')
-        fout.write('Pollutant,Input(tons/day),Output(tons/day)\n')
+        fout.write('Pollutant,Input(tons/day),After Scaling(tons/day),Output(tons/day)\n')
 
         # write pollutant totals
-        for poll in sorted(self.POLLS):
+        for poll in sorted(in_totals.keys()):
             ncf_total = 0.0
             for sp in self.groups[poll]['species']:
                 ind = species[sp]['index']
@@ -1375,9 +1383,9 @@ class DictToNcfWriter(object):
                     fraction *= self.groups[poll]['weights'][ind] / self.groups[poll]['weights'][so2_ind]
                 ncf_total += totals[sp] / fraction
 
-            in_total = in_totals[poll] if poll in in_totals else 0.0
-            if in_total + ncf_total > 0.0:
-                fout.write(poll + ',' + str(in_total) + ',' + str(ncf_total) + '\n')
+            in_total = str(in_totals[poll]) if poll in in_totals else '0.0'
+            scaled_total = str(scaled_totals[poll]) if poll in scaled_totals else '0.0'
+            fout.write(','.join([poll, in_total, scaled_total, str(ncf_total)]) + '\n')
 
         fout.close()
 
