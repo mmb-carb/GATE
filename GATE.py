@@ -1270,6 +1270,8 @@ class DictToNcfWriter(object):
         nox_fraction = self.gspro['DEFNOX']['NOX']
         sox_fraction = self.gspro['SOX']['SOX']
 
+        dropped_eics = set()
+
         for hour in xrange(24):
             # adjust hr for DST
             if gmt_shift == '19':
@@ -1295,12 +1297,14 @@ class DictToNcfWriter(object):
                             if int(eic) in self.gsref:
                                 fraction *= self.gspro[self.gsref[int(eic)]['TOG']]['TOG'][ind]
                             else:
-                                print eic  # TODO: JOHN TESTING  SPECAIATION SHOULD FAIL!!!!!
+                                dropped_eics.adde(eic)
+                                continue
                         elif poll == 'PM':
                             if int(eic) in self.gsref:
                                 fraction *= self.gspro[self.gsref[int(eic)]['PM']]['PM'][ind]
                             else:
-                                print eic  # TODO:  SPECAIATION SHOULD FAIL!!!!!
+                                dropped_eics.adde(eic)
+                                continue
                         elif poll == 'NOX':
                             fraction *= nox_fraction[ind]
                         elif poll == 'SOX':
@@ -1314,6 +1318,11 @@ class DictToNcfWriter(object):
                     if hr == 0:
                         ncf.variables[spec][24,:,:,:] = grid
 
+        if dropped_eics:
+            print('\t\tEmissions were lost, because these EICs were not found in the GSREF file:')
+            for eic in sorted(dropped_eics):
+                print('\t\t\t' + str(eic))
+
         if self.print_totals:
             self._print_totals_to_csv(ncf, emis, out_path)
 
@@ -1324,7 +1333,7 @@ class DictToNcfWriter(object):
             emis[region][airport][eic][poll] => tons/day
         '''
         # TODO: Also print scaled emissions
-        
+
         # find species position by pollutant
         species = {}
         for group in self.groups:
