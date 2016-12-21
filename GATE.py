@@ -101,7 +101,7 @@ def main():
 
 class GATE(object):
 
-    GATE_VERSION = '0.2.7'
+    GATE_VERSION = '0.2.8'
 
     def __init__(self, config):
         ''' build  each step of the model '''
@@ -225,7 +225,7 @@ class EmissionsReader(object):
         cats = eval(open(config['CATEGORIES_FILE']).read())
         self.eics = cats['eics']
         self.scc2eic = cats['scc2eic']
-        self.helicopter_sccs = cats['helicopter_sccs']
+        self.helicopter_sccs = cats['helicopter_sccs']  # TODO: Unused!
         self.regions = config['REGIONS']
         self.gai_codes = eval(open(config['GAI_CODES_FILE'], 'r').read())
         self.facility_ids = eval(open(config['FACILITY_ID_FILE'], 'r').read())
@@ -409,7 +409,7 @@ class TemporalSurrogateBuilder(object):
                 for airport in self.file_profs[region]:
                     if airport not in self.temp_profs[d_str][region]:
                         self.temp_profs[d_str][region][airport] = {}
-                    for eic in self.eics:
+                    for eic in [-1] + self.eics:
                         def_eic = eic if eic in self.file_profs[region][airport] else self.DEFAULT
                         # check if default has already been included
                         if def_eic not in self.temp_profs[d_str][region][airport]:
@@ -417,29 +417,36 @@ class TemporalSurrogateBuilder(object):
                         else:
                             continue
 
+                        file_region = self.file_profs[region]
+
                         # monthly scaling factor
-                        if 'monthly' in self.file_profs[region][airport][def_eic]:
-                            factor_month = self.file_profs[region][airport][def_eic]['monthly'][month]
-                        else:
-                            factor_month = self.file_profs[region][self.DEFAULT][def_eic]['monthly'][month]
+                        try:
+                            factor_month = file_region[airport][def_eic]['monthly'][month]
+                        except:
+                            try:
+                                factor_month = file_region[self.DEFAULT][def_eic]['monthly'][month]
+                            except:
+                                factor_month = file_region[self.DEFAULT][self.DEFAULT]['monthly'][month]
 
                         # dow scaling factor
-                        if 'weekly' in self.file_profs[region][airport][def_eic]:
-                            factor_dow = self.file_profs[region][airport][def_eic]['weekly'][dow]
-                        else:
-                            factor_dow = self.file_profs[region][self.DEFAULT][def_eic]['weekly'][dow]
+                        try:
+                            factor_dow = file_region[airport][def_eic]['weekly'][dow]
+                        except:
+                            try:
+                                factor_dow = file_region[self.DEFAULT][def_eic]['weekly'][dow]
+                            except:
+                                factor_dow = file_region[self.DEFAULT][self.DEFAULT]['weekly'][dow]
 
                         # 24-hr diurnal scaling factors
-                        if dow < 5:
-                            if 'duirnal_weekday' in self.file_profs[region][airport][def_eic]:
-                                factors_diurnal = self.file_profs[region][airport][def_eic]['duirnal_weekday']
-                            else:
-                                factors_diurnal = self.file_profs[region][self.DEFAULT][def_eic]['duirnal_weekday']
-                        else:
-                            if 'duirnal_weekend' in self.file_profs[region][airport][def_eic]:
-                                factors_diurnal = self.file_profs[region][airport][def_eic]['duirnal_weekend']
-                            else:
-                                factors_diurnal = self.file_profs[region][self.DEFAULT][def_eic]['duirnal_weekend']
+                        diurn = 'diurnal_weekday' if dow < 5 else 'diurnal_weekend'
+
+                        try:
+                            factors_diurnal = file_region[airport][def_eic][diurn]
+                        except:
+                            try:
+                                factors_diurnal = file_region[self.DEFAULT][def_eic][diurn]
+                            except:
+                                factors_diurnal = file_region[self.DEFAULT][self.DEFAULT][diurn]
 
                         # combine scaling factors to a resultant 24-hr cycle
                         self.temp_profs[d_str][region][airport][def_eic] = [f * factor_month * factor_dow for f in factors_diurnal]
@@ -460,7 +467,7 @@ class TemporalSurrogateBuilder(object):
 
         default = 'default'
         sep = '|'
-        options = {'monthly': 12, 'weekly': 7, 'duirnal_weekday': 24, 'duirnal_weekend': 24}
+        options = {'monthly': 12, 'weekly': 7, 'diurnal_weekday': 24, 'diurnal_weekend': 24}
 
         # read file header to get column separator
         f = open(self.temp_file, 'r')
@@ -469,7 +476,8 @@ class TemporalSurrogateBuilder(object):
             sep = last_col[-1]
 
         # parse all lines in file into dict
-        lines = [line.rstrip().lower().split(',') for line in f.readlines()]
+        lines = [line.rstrip().split(',') for line in f.xreadlines()]
+        lines = filter(lambda l: len(l) > 4, lines)
         data = dict((tuple(line[:4]), [float(v) for v in line[-1].split(sep)]) for line in lines)
 
         # ignore the case: default type
@@ -479,7 +487,7 @@ class TemporalSurrogateBuilder(object):
                 del data[key]
 
         # handle the case: full-default profiles
-        for typ in ['monthly', 'weekly', 'duirnal_weekday', 'duirnal_weekend']:
+        for typ in ['monthly', 'weekly', 'diurnal_weekday', 'diurnal_weekend']:
             default_key = (default, default, default, typ)
             if default_key in data:
                 for region in self.regions:
@@ -489,11 +497,13 @@ class TemporalSurrogateBuilder(object):
                         profiles[region][self.DEFAULT][self.DEFAULT] = {}
                     profiles[region][self.DEFAULT][self.DEFAULT][typ] = data[default_key]
                 del data[default_key]
+            else:
+                raise ValueError("Default temporal profile missing: " + str(default_key))
 
         # ignore the case: default-region but specific airport
         for key in list(data.keys()):
             if key[0] != default and key[1] == default:
-                print('\t\tERROR: Temporal profiles can not have default region without default airport')
+                raise Warning('Temporal profiles can not have default region without default airport')
                 del data[key]
 
         # handle the case: default all-but-EIC
@@ -503,6 +513,11 @@ class TemporalSurrogateBuilder(object):
                     if key[2] not in profiles[region][self.DEFAULT]:
                         profiles[region][self.DEFAULT][key[2]] = {}
                     profiles[region][self.DEFAULT][key[2]][key[3]] =  data[key]
+                del data[key]
+
+        # ignore aiports: with specific region that is not part of this run
+        for key in list(data.keys()):
+            if int(key[0]) not in self.regions:
                 del data[key]
 
         # handle the case: specific region, default EIC
@@ -549,6 +564,7 @@ class SpatialSurrogateBuilder(object):
         self.lon_dot = None
         self._read_grid_corners_file()
         self.surrogates = dict((r, {}) for r in config['REGIONS'])
+        self.regions = config['REGIONS']
         self.region_boxes = eval(open(config['REGION_BOX_FILE'], 'r').read())
         self.kdtree = self.create_kdtrees()
         self.takoff_angles = config['TAKEOFF_ANGLES']
@@ -1272,21 +1288,19 @@ class DictToNcfWriter(object):
                     for eic, eic_data in scaled_emissions.iteritems():
                         if poll not in eic_data[hour]: continue
 
-                        # TOG and PM fractions are EIC-dependent
-                        if int(eic) in self.gsref:
-                            tog_fraction = self.gspro[self.gsref[int(eic)]['TOG']]['TOG']
-                            pm_fraction = self.gspro[self.gsref[int(eic)]['PM']]['PM']
-                        else:
-                            tog_fraction = []
-                            pm_fraction = []
-
                         # species fractions
                         fraction = (self.STONS_HR_2_G_SEC / self.groups[poll]['weights'][ind])
 
-                        if poll == 'TOG' and len(tog_fraction):
-                            fraction *= tog_fraction[ind]
-                        elif poll == 'PM' and len(pm_fraction):
-                            fraction *= pm_fraction[ind]
+                        if poll == 'TOG':
+                            if int(eic) in self.gsref:
+                                fraction *= self.gspro[self.gsref[int(eic)]['TOG']]['TOG'][ind]
+                            else:
+                                print eic  # TODO: JOHN TESTING  SPECAIATION SHOULD FAIL!!!!!
+                        elif poll == 'PM':
+                            if int(eic) in self.gsref:
+                                fraction *= self.gspro[self.gsref[int(eic)]['PM']]['PM'][ind]
+                            else:
+                                print eic  # TODO:  SPECAIATION SHOULD FAIL!!!!!
                         elif poll == 'NOX':
                             fraction *= nox_fraction[ind]
                         elif poll == 'SOX':
@@ -1309,6 +1323,8 @@ class DictToNcfWriter(object):
         ''' if requested, print a simple CSV of totals, by pollutant
             emis[region][airport][eic][poll] => tons/day
         '''
+        # TODO: Also print scaled emissions
+        
         # find species position by pollutant
         species = {}
         for group in self.groups:
