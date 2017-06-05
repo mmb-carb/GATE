@@ -463,7 +463,7 @@ class TemporalSurrogateBuilder(object):
             default,default,default,weekly,1.03601|1.017904|1.025875|1.015781|...
         '''
         # rearrange file above into usable data, taking care of defaults appropriately
-        profiles = {r: {} for r in self.regions}
+        profiles = dict((r, {}) for r in self.regions)
 
         default = 'default'
         sep = '|'
