@@ -41,7 +41,7 @@ FACILITY_ID_FILE = 'input/default/facility_ids.py'
 ## TEMPORAL INFO
 TEMPORAL_FILE = 'input/temporal/aircraft_temporal_profiles_2002-2015_v1.csv'
 ## OUTPUT INFO
-VERSION = 'v0100'
+VERSION = 'v0101'
 GSPRO_FILE = 'input/ncf/gspro.cmaq.saprc.31dec2015.all.csv'
 GSREF_FILE = 'input/ncf/gsref_28july2016_2012s.txt'
 WEIGHT_FILE = 'input/ncf/molecular.weights.txt'
@@ -838,8 +838,8 @@ class SpatialSurrogateBuilder(object):
         dist_sq_min, minindex_1d = self.kdtree[region].query([clat0*clon0, clat0*slon0, slat0])
         y, x = np.unravel_index(minindex_1d, (lat_max - lat_min, lon_max - lon_min))
 
-        y = lat_min + y + 1
-        x = lon_min + x + 1
+        y = lat_min + y
+        x = lon_min + x - 1
 
         # truncate values that have gone past the grid boundaries
         if y < 0:
@@ -853,12 +853,13 @@ class SpatialSurrogateBuilder(object):
 
         # find vertical grid cell
         z = 0
-        layers = [self.zf[i][y][x] for i in xrange(len(self.zf))]
-        for i, layer in enumerate(layers):
-            if layer > p[0]:
+        if p[0] > 0:
+            layers = [self.zf[i][y][x] for i in xrange(len(self.zf))]
+            for i, layer in enumerate(layers):
+                if layer > p[0]:
+                    z = i
+                    break
                 z = i
-                break
-            z = i
 
         return array([z, x, y], dtype=int)
 
