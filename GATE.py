@@ -502,7 +502,7 @@ class TemporalSurrogateBuilder(object):
 
         # ignore the case: default-region but specific airport
         for key in list(data.keys()):
-            if key[0] != default and key[1] == default:
+            if key[0] == default and key[1] != default:
                 raise Warning('Temporal profiles can not have default region without default airport')
                 del data[key]
 
@@ -1297,13 +1297,13 @@ class DictToNcfWriter(object):
                             if int(eic) in self.gsref:
                                 fraction *= self.gspro[self.gsref[int(eic)]['TOG']]['TOG'][ind]
                             else:
-                                dropped_eics.adde(eic)
+                                dropped_eics.add(eic)
                                 continue
                         elif poll == 'PM':
                             if int(eic) in self.gsref:
                                 fraction *= self.gspro[self.gsref[int(eic)]['PM']]['PM'][ind]
                             else:
-                                dropped_eics.adde(eic)
+                                dropped_eics.add(eic)
                                 continue
                         elif poll == 'NOX':
                             fraction *= nox_fraction[ind]
