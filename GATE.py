@@ -101,7 +101,7 @@ def main():
 
 class GATE(object):
 
-    GATE_VERSION = '0.2.8'
+    GATE_VERSION = '0.2.9'
 
     def __init__(self, config):
         ''' build  each step of the model '''
@@ -1291,19 +1291,21 @@ class DictToNcfWriter(object):
                         if poll not in eic_data[hour]: continue
 
                         # species fractions
-                        fraction = (self.STONS_HR_2_G_SEC / self.groups[poll]['weights'][ind])
+                        fraction = self.STONS_HR_2_G_SEC / self.groups[poll]['weights'][ind]
 
                         if poll == 'TOG':
                             if int(eic) in self.gsref:
-                                fraction *= self.gspro[self.gsref[int(eic)]['TOG']]['TOG'][ind]
+                                if self.gspro[self.gsref[int(eic)]['TOG']]['TOG'][ind] <= 0:
+                                    continue
+                                fraction = self.STONS_HR_2_G_SEC * self.gspro[self.gsref[int(eic)]['TOG']]['TOG'][ind]
                             else:
-                                dropped_eics.adde(eic)
+                                dropped_eics.add(eic)
                                 continue
                         elif poll == 'PM':
                             if int(eic) in self.gsref:
                                 fraction *= self.gspro[self.gsref[int(eic)]['PM']]['PM'][ind]
                             else:
-                                dropped_eics.adde(eic)
+                                dropped_eics.add(eic)
                                 continue
                         elif poll == 'NOX':
                             fraction *= nox_fraction[ind]
@@ -1571,6 +1573,8 @@ class DictToNcfWriter(object):
             ln = line.rstrip().split(',')
             profile = ln[0].upper()
             group = ln[1].upper()
+            if float(ln[5]) <= 0:
+                continue
             if group not in self.groups:
                 sys.exit('ERROR: Group ' + group + ' not found in molecular weights file.')
             pollutant = ln[2].upper()
@@ -1586,6 +1590,10 @@ class DictToNcfWriter(object):
                 self.gspro[profile][group] = np.zeros(len(self.groups[group]['species']),
                                                       dtype=np.float32)
             self.gspro[profile][group][poll_index] = np.float32(ln[5])
+
+            # TOG is in moles, not grams
+            if group == 'TOG':
+                self.gspro[profile][group][poll_index] = np.float32(ln[3])
 
         f.close()
 
