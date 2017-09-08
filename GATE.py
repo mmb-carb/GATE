@@ -1,4 +1,47 @@
+#!/usr/bin/env python
+"""
+GATE
+Usage: ./GATE.py [-FLAGS]
+Create 3D CMAQ-ready NetCDF files for aircraft emissions.
 
+Optional Arguments:
+  -DATES               dates to model aircraft emissions
+  -DATE_FORMAT         Python datetime format string for the above
+  -THREE_DAY_MONTH     True if each month can be represented by 3 days
+  -BASE_YEAR           base year
+  -REGIONS             numerical region list
+  -NUM_PROCS           number of parallel processes to run (1 per day)
+  -GRID_DOT_FILE       path to CMAQ GRIDDOT2D file
+  -MET_ZF_FILE         path to CMAQ METCRO3D file
+  -NCOLS               number of columns in modeling domain
+  -NROWS               number of rows in modeling domain
+  -NLAYERS             total number of vertical layers
+  -NUM_NONZERO_LAYERS  number of vertical layers with emissions
+  -ABL_METERS          How high is the ABL, in meters?
+  -REGION_BOX_FILE     path to Python file with I/J box for each region
+  -TAKEOFF_ANGLES      take-off angles to model
+  -LAND_ANGLES         landing angles to model
+  -RUNWAY_FILE         path to CSV with lat/lons for all runways
+  -FLIGHT_FRACTS_FILE  path to CSV for species fractions by flight stage
+  -CATEGORIES_FILE     path to Python file with aircraft EIC codes
+  -AREA_FILES          path to FF10 file with area source emissions
+  -POINT_FILES         path to CSV file with point source emissions
+  -GAI_CODES_FILE      path to Python file with region code information
+  -FACILITY_ID_FILE    path to Python file with airport FAA codes
+  -TEMPORAL_FILE       path to CSV file with airport temporal profiles
+  -VERSION             string used to identify the run
+  -GSPRO_FILE          path to SMOKE-style GSPRO file
+  -GSREF_FILE          path to SMOKE-style GSREF file
+  -WEIGHT_FILE         path to file with molecular weights
+  -OUT_DIR             path to output directory
+  -SHOULD_ZIP          True if you want to gzip outputs, False otherwise
+  -PRINT_TOTALS        True if you want to print totals to stdout
+
+This program can be run without commandline arguments by setting config
+variables in the script.
+
+Report bugs to <https://github.com/mmb-carb/GATE/issues>.
+"""
 from datetime import datetime, timedelta
 import multiprocessing
 from numpy import arcsin, array, cos, isnan, pi, radians, sin, sqrt, tan
@@ -90,13 +133,20 @@ def main():
                 else:
                     config[flag] = typ(value)
         else:
-            print('ERROR: Command-Line Flag Not Recognized: ' + flag)
+            usage()
 
         a += 1
 
     # run program
     gate = GATE(config)
     gate.run()
+
+
+def usage():
+    ''' Print the help menu.
+    '''
+    print(__doc__.strip())
+    exit()
 
 
 class GATE(object):
