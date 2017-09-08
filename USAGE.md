@@ -25,17 +25,31 @@ When configured inside the script, this variable is a list of date strings.  Whe
 
 > Python datetime format string for the above
 
+This is a single string in the Python `datetime` format.  The default value is `%Y-%m-%d`.  For more information on Python `datetime` formats see the [official documentation](https://docs.python.org/2/library/datetime.html#strftime-and-strptime-behavior).
+
 #### THREE_DAY_MONTH
 
 > True if each month can be represented by 3 days
+
+If `True`, any month you want to run will be reduce to only three days: the second Wednesday, Saturday, and Sunday. Set it to `False` to run for the exact days in your range.
+
+This may seem like a strange option, but it exists to help make GATE more uniform with certain other inventory sectors.
 
 #### BASE_YEAR           
 
 > base year
 
+Frequently, the base year and the model year of an inventory are different.  If so, this can be set to a base year, to be differentiated from the year in the `DATES` variable above.
+
+NOTE: The `DATES` and `BASE_YEAR` variable do not allow for GATE to be run for multiple years in one pass.
+
 #### REGIONS             
 
 > numerical region list
+
+"Regions" can be counties, GAIs, states, or anything else.  This is kept vague, and regions are denoted by numbers so that GATE can more easily be used in different scenarios, like counties and states in different runs.
+
+When configured inside the script, this variable is a list of integers.  When configured from the command line, multiple regions are comma separated.
 
 #### NUM_PROCS           
 
