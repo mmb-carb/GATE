@@ -79,7 +79,7 @@ An integer representing the number of West-to-East columns in the modeling domai
 
 > number of rows in modeling domain
 
-An integer representing the number of North-to-South rows in the modeling domain.
+An integer representing the number of South-to-North rows in the modeling domain.
 
 #### NLAYERS             
 
@@ -103,25 +103,112 @@ This is a float value of the approximate height of the Atmospheric Boundary Laye
 
 > path to Python file with I/J box for each region
 
+This is the path to a Python file with the I/J bounding boxes for each region in the modeling domain.  For instance, the California County region bounding box starts like this:
+
+    {1: {'lat': (176, 195), 'lon': (177, 194)},
+     ...
+     }
+
+In the example above, the key to the dictionary is the region code (`1`), and that region (Alameda County) stretches from grid cell 176 to 195 in the South-to-North direction and grid cells 177 to 194 in the West-to-East direction.
+
+This simple Python dictionary is provided to greatly improve the efficiency of finding which grid cells each runway lat/lon lies in.  If the user does not know (and cannot calculate) the I/J bounding boxes of each region in their domain, these boxes could be replaced with the entire modeling domain.  For instance, in the California 4km statewide modeling domain this would look like:
+
+    {1: {'lat': (0, 291), 'lon': (0, 321)},
+     2: {'lat': (0, 291), 'lon': (0, 321)},
+     ...
+     }
+
+GATE will run with default region describes, like the above.  But it should be noted that this will probably make GATE run significantly slower.
+
 #### TAKEOFF_ANGLES      
 
 > take-off angles to model
+
+Commercial aircraft are typical required by air traffic control to take off within a narrow range of angles.  Our research currently shows that range is between 10 and 30 degrees.
+
+When modeling the take off and landing patterns of aircraft from a given runway, several different angles are selected within a range to represent aircraft flight patterns.  While any arbitrarily large number of angles can be chosen to improve accuracy, often just three angles in a small range will suffice.  Also, selecting more angles may slow down the model.
+
+What the user provide is a list of one or more angles (in radians).  Inside the script, this might look like:
+
+    TAKEOFF_ANGLES = [radians(10), radians(20), radians(30)]
+
+Or, if the user wants to improve accuracy at the cost of model performance:
+
+    TAKEOFF_ANGLES = [radians(10), radians(15), radians(20), radians(25), radians(30)]
+
+And from the command line that might look like:
+
+    -TAKEOFF_ANGLES 0.175,0.349,0.524
 
 #### LAND_ANGLES         
 
 > landing angles to model
 
+Commercial aircraft are typical required by air traffic control to land within a narrow range of angles.  Our research currently shows that range is between 2.5 and 3.5 degrees.
+
+When modeling the take off and landing patterns of aircraft from a given runway, several different angles are selected within a range to represent aircraft flight patterns.  While any arbitrarily large number of angles can be chosen to improve accuracy, often just three angles in a small range will suffice.  Also, selecting more angles may slow down the model.
+
+What the user provide is a list of one or more angles (in radians).  Inside the script, this might look like:
+
+    LAND_ANGLES = [radians(2.5), radians(3), radians(3.5)]
+
+And from the command line that might look like:
+
+    -LAND_ANGLES 0.0436,0.0524,0.0611
+
 #### RUNWAY_FILE         
 
 > path to CSV with lat/lons for all runways
+
+This is a path to a CSV file with a complete description of the location of every runway (and helipad) in the modeling domain.  An example CSV might look like:
+
+    airport,region,runway,flights,land_lat,land_lon,takeoff_lat,takeoff_lon
+    LAX,59,06L/24R,158967.0,33.9491124722,-118.431159861,33.9521039167,-118.401948917
+    LAX,59,06R/24L,158967.0,33.9467474722,-118.435327222,33.9501944444,-118.401668667
+    LAX,59,07L/25R,158967.0,33.9358305833,-118.41934175,33.9398771944,-118.379776944
+    LAX,59,07R/25L,158967.0,33.9336493889,-118.419018333,33.9373630278,-118.382713917
+    SFO,44,01L/19R,107991.5,37.607897,-122.382928,37.62648025,-122.370609028
+    SFO,44,01R/19L,107991.5,37.6063290833,-122.381040361,37.6273412222,-122.367110361
+    SFO,44,10L/28R,107991.5,37.6287386111,-122.393391139,37.6135323611,-122.357141028
+    SFO,44,10R/28L,107991.5,37.6262900278,-122.393105417,37.6117091389,-122.358342
+    FAUX8009H,57,H,1.0,34.464612,-120.039316,H,H
+    FAUX8013H,81,H,10.0,34.469136,-120.680817,H,H
+
+It is worth explaining the columns in the above CSV file:
+
+* **airport** - Official FAA airport code.  In the example above two official FAA airport codes are listed: LAX in Los Angeles and SFO in San Francisco. There are also two fake (faux) FAA codes listed, which were generated ad-hoc for a couple of helicopter landing pads: FAUX8009H and FAUX8013H.
+* **region** - This is a single number to match the given airport/helipad with the region.  This region code must match the region code used elsewhere in the modeling.
+* **runway** - This is a string representing the runway.  Many airports, and all major airports, have several runways.  In order to model aircraft emissions, we need to model each runway at an airport individually.  These strings can be any ad hoc string, though it is preferable to use official FAA code where possible. Notice that this field is meaningless for helicopter landing pads and so there the default value `H` is used.
+* **flights** - Average number of flights per year.  This can be a decimal because it is an average.  Also, it should be noticed that in practice the average number of flights per year is not well known for smaller airports and helipads.
+* **land_lat** - This is the latitude of the landing side of the runway.  A runway is straight line it is defined by two lat/lon points.  In the case of helipads, there is only one point, which we here call the landing side.
+* **land_lon** - This is the longitude of the landing side of the runway.  A runway is straight line it is defined by two lat/lon points.  In the case of helipads, there is only one point, which we here call the landing side.
+* **takeoff_lat** - This is the latitude of the take-off side of the runway.  A runway is straight line it is defined by two lat/lon points.  In the case of helipads, this takes the default value `H`.
+* **takeoff_lon** - This is the longitude of the take-off side of the runway.  A runway is straight line it is defined by two lat/lon points.  In the case of helipads, this takes the default value `H`.
+
+A good source of data for the lat/lon locations of the each end of every runway in America can be found on the commercial [Airport IQ 5010](http://www.gcr1.com/5010web/) website.
 
 #### FLIGHT_FRACTS_FILE  
 
 > path to CSV for species fractions by flight stage
 
+This is the path to the flight fractions CSV file.  This CSV exists to define what percentage of emissions goes into the landing, taxiing, and take-off flight stages.  The CSV contains columns for these three fractions for each EIC and pollutant.
+
+This file exists so that emissions from aircraft can be placed into the correct spatial locations with reference to each runway.
+
 #### CATEGORIES_FILE     
 
 > path to Python file with aircraft EIC codes
+
+This is a single Python dictionary saved to a Python file, to explicitly list all of the EIC/SCC categories that will be modeled for aircraft.  The GATE model reads input non-spatial emissions files, which may have any number of emissions categories. This Python file exists so that only aircraft emissions are selected from the input emissions files (listed under the `AREA_FILES` and `POINT_FILES` variables).
+
+This Python dictionary has four keys, that correspond to four category collections:
+
+* **eics** - This is a simple list of all the aircraft EICs.
+* **sccs** - This is a list of all the aircraft SCCs (helicopter and airplane)
+* **helicopter_sccs** - This is a list of just the helicopter SCCs.
+* **scc2eic** - This is a mapping from SCC to EIC.
+
+This file needs to incorporate both EIC and SCC codes because the CARB inventory uses EIC for area sources and SCC for point sources.
 
 #### AREA_FILES          
 
@@ -129,11 +216,13 @@ This is a float value of the approximate height of the Atmospheric Boundary Laye
 
 #### POINT_FILES         
 
-> path to CSV file with point source emissions
+> path to FF10 file with point source emissions
 
 #### GAI_CODES_FILE      
 
 > path to Python file with region code information
+
+The path to a Python file with a single
 
 #### FACILITY_ID_FILE    
 
@@ -151,6 +240,8 @@ This is a float value of the approximate height of the Atmospheric Boundary Laye
 
 > path to SMOKE-style GSPRO file
 
+This is a short string with a version number or identifying note.  It is put into the output file names, as an identifier.
+
 #### GSREF_FILE          
 
 > path to SMOKE-style GSREF file
@@ -163,11 +254,37 @@ This is a float value of the approximate height of the Atmospheric Boundary Laye
 
 > path to output directory
 
+This is the path to a directory for output files.  If this directory does not exist, GATE will try and create it.
+
 #### SHOULD_ZIP          
 
 > True if you want to gzip outputs, False otherwise
+
+The user may want output files compressed with gzip, or not.
+
+This is a simple boolean flag, defined in the script with a Python boolean value:
+
+    SHOULD_ZIP = True
+    SHOULD_ZIP = False
+
+But from the command line, it must be configured using a string:
+
+    -SHOULD_ZIP True
+    -SHOULD_ZIP False
+
 
 #### PRINT_TOTALS        
 
 > True if you want to print totals to stdout
 
+The user may want to print quick model-wide, daily emissions totals to standard out, or not.
+
+This is a simple boolean flag, defined in the script with a Python boolean value:
+
+    PRINT_TOTALS = True
+    PRINT_TOTALS = False
+
+But from the command line, it must be configured using a string:
+
+    -PRINT_TOTALS True
+    -PRINT_TOTALS False
