@@ -55,33 +55,49 @@ When configured inside the script, this variable is a list of integers.  When co
 
 > number of parallel processes to run (1 per day)
 
+Each day in a GATE run is independent of the days around it.  So it is possible to run GATE in parallel; one parallel run for each day at maximum.  But the number of parallel runs that your system has resources for is the decision of the user.  The default value for this parameter is one.
+
 #### GRID_DOT_FILE       
 
 > path to CMAQ GRIDDOT2D file
+
+This is the path to the CMAQ-formatted `GRIDDOT2D` file. This file defines the lat/lon coordinates of the corners of the grid cells in the modeling domain.  For the most current CMAQ documentation, look [here](https://www.epa.gov/cmaq/cmaq-documentation).
 
 #### MET_ZF_FILE         
 
 > path to CMAQ METCRO3D file
 
+This is the path to the CMAQ-formatted `METCRO3d` file. Among other things, this file defines the height of all the z-layer grid cells at each I/J location around the modeling domain.  For the most current CMAQ documentation, look [here](https://www.epa.gov/cmaq/cmaq-documentation).
+
 #### NCOLS               
 
 > number of columns in modeling domain
+
+An integer representing the number of West-to-East columns in the modeling domain.
 
 #### NROWS               
 
 > number of rows in modeling domain
 
+An integer representing the number of North-to-South rows in the modeling domain.
+
 #### NLAYERS             
 
 > total number of vertical layers
+
+An integer representing the number of vertical layers in the modeling domain.
 
 #### NUM_NONZERO_LAYERS  
 
 > number of vertical layers with emissions
 
+An integer representing the number of non-zero vertical layers in the modeling domain.  This is a performance bump, because frequently the aircraft emissions will not stretch the entire vertical length of the modeling domain.  If unsure, the best default value here is the number of vertical layers.
+
 #### ABL_METERS          
 
 > height of the ABL, in meters
+
+This is a float value of the approximate height of the Atmospheric Boundary Layer (ABL) in meters.
 
 #### REGION_BOX_FILE     
 
