@@ -25,7 +25,7 @@ NROWS = 291
 NLAYERS = 18
 NUM_NONZERO_LAYERS = 12
 ABL_METERS = 1000
-REGION_BOX_FILE = 'input/default/region_boxes.py'
+REGION_BOX_FILE = 'input/default/region_boxes.csv'
 ## FLIGHT PATH INFO
 TAKEOFF_ANGLES = [radians(10), radians(20), radians(30)]
 LAND_ANGLES = [radians(2.5), radians(3), radians(3.5)]
@@ -122,7 +122,7 @@ Optional Arguments:
   -NLAYERS              total number of vertical layers
   -NUM_NONZERO_LAYERS   number of vertical layers with emissions
   -ABL_METERS           height of the ABL, in meters
-  -REGION_BOX_FILE      path to Python file with I/J box for each region
+  -REGION_BOX_FILE      path to CSV file with I/J box for each region
   -TAKEOFF_ANGLES       take-off angles to model
   -LAND_ANGLES          landing angles to model
   -RUNWAY_FILE          path to CSV with lat/lons for all runways
@@ -276,7 +276,6 @@ class EmissionsReader(object):
         cats = eval(open(config['CATEGORIES_FILE']).read())
         self.eics = cats['eics']
         self.scc2eic = cats['scc2eic']
-        self.helicopter_sccs = cats['helicopter_sccs']  # TODO: Unused!
         self.regions = config['REGIONS']
         rsf = config['REGION_STRINGS_FILE']
         self.region_strings = dict((c[1], int(c[0])) for c in [l.rstrip().split(',') for l in open(rsf, 'r').readlines()[1:]])
@@ -623,7 +622,7 @@ class SpatialSurrogateBuilder(object):
         self._read_grid_corners_file()
         self.surrogates = dict((r, {}) for r in config['REGIONS'])
         self.regions = config['REGIONS']
-        self.region_boxes = eval(open(config['REGION_BOX_FILE'], 'r').read())
+        self.region_boxes = self.read_region_box_file(config['REGION_BOX_FILE'])
         self.kdtree = self.create_kdtrees()
         self.takoff_angles = config['TAKEOFF_ANGLES']
         self.landing_angles = config['LAND_ANGLES']
@@ -772,6 +771,13 @@ class SpatialSurrogateBuilder(object):
 
                         print(region, airport, eic, poll)
                         print([(coord, color) for coord,color in s.iteritems()])
+
+    @staticmethod
+    def read_region_box_file(file_path):
+        ''' Read the region box CSV file into a custom dictionary
+        '''
+        boxes = [c.rstrip().split(',') for c in open(file_path, 'r').readlines()[1:]]
+        return dict((int(b[0]), {'lat': (int(b[1]), int(b[2])), 'lon': (int(b[3]), int(b[4]))}) for b in boxes)
 
     def _read_grid_heights(self):
         '''Read the heights of all the grid layers in the modeling domain.
