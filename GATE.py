@@ -33,8 +33,8 @@ RUNWAY_FILE = 'input/default/runway_info_cali.csv'
 FLIGHT_FRACTS_FILE = 'input/default/flight_stage_fractions_20161004.csv'
 ## EMISSIONS INFO
 CATEGORIES_FILE = 'input/default/aircraft_categories.py'
-AREA_FILES = ['input/emis/st_4k.ar.v0001.810.2012.2012.rf2095_snp20160627.SMOKEv4p0..ff10']
-POINT_FILES = ['input/emis/st_4k.ps.v0001.810.2012.2012.rf2095_snp20160627.SMOKEv4p0.EIC14.ff10.csv']
+AREA_FILES = ['input/emis/example_area_aircraft_ca_2012.ff10']
+POINT_FILES = ['input/emis/example_point_aircraft_ca_2012.ff10']
 GAI_CODES_FILE = 'input/default/gai_codes.py'
 FACILITY_ID_FILE = 'input/default/facility_ids.py'
 ## TEMPORAL INFO
@@ -152,7 +152,7 @@ Report bugs to <https://github.com/mmb-carb/GATE/issues>.
 
 class GATE(object):
 
-    GATE_VERSION = '0.2.9'
+    GATE_VERSION = '0.3.0'
 
     def __init__(self, config):
         ''' build  each step of the model '''
