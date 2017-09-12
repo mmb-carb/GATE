@@ -36,11 +36,11 @@ CATEGORIES_FILE = 'input/default/aircraft_categories.py'
 AREA_FILES = ['input/emis/example_area_aircraft_ca_2012.ff10']
 POINT_FILES = ['input/emis/example_point_aircraft_ca_2012.ff10']
 REGION_STRINGS_FILE = 'input/default/region_strings.csv'
-FACILITY_ID_FILE = 'input/default/facility_ids.py'
+FACILITY_ID_FILE = 'input/default/facility_ids.csv'
 ## TEMPORAL INFO
 TEMPORAL_FILE = 'input/temporal/aircraft_temporal_profiles_2002-2015_v1.csv'
 ## OUTPUT INFO
-VERSION = 'v0101'
+VERSION = 'v0100'
 GSPRO_FILE = 'input/ncf/gspro.cmaq.saprc.31dec2015.all.csv'
 GSREF_FILE = 'input/ncf/gsref_28july2016_2012s.txt'
 WEIGHT_FILE = 'input/ncf/molecular.weights.txt'
@@ -131,7 +131,7 @@ Optional Arguments:
   -AREA_FILES           path to FF10 file with area source emissions
   -POINT_FILES          path to CSV file with point source emissions
   -REGION_STRINGS_FILE  path to Python file with region code information
-  -FACILITY_ID_FILE     path to Python file with airport FAA codes
+  -FACILITY_ID_FILE     path to CSV file with airport FAA codes
   -TEMPORAL_FILE        path to CSV file with airport temporal profiles
   -VERSION              string used to identify the run
   -GSPRO_FILE           path to SMOKE-style GSPRO file
@@ -280,7 +280,7 @@ class EmissionsReader(object):
         self.regions = config['REGIONS']
         rsf = config['REGION_STRINGS_FILE']
         self.region_strings = dict((c[1], int(c[0])) for c in [l.rstrip().split(',') for l in open(rsf, 'r').readlines()[1:]])
-        self.facility_ids = eval(open(config['FACILITY_ID_FILE'], 'r').read())
+        self.facility_ids = self.read_facility_file(config['FACILITY_ID_FILE'])
         self.airports = SpatialSurrogateBuilder.read_runways(config['RUNWAY_FILE'])
         self.airport_emis = {}
 
@@ -362,6 +362,13 @@ class EmissionsReader(object):
                             self.airport_emis[region][airport][eic][poll] = 0.0
                         self.airport_emis[region][airport][eic][poll] += emis * fraction
 
+    @staticmethod
+    def read_facility_file(file_path):
+        ''' read the airport/helipad information CSV into a custom dictionary
+        '''
+        ids = [l.rstrip().split(',') for l in open(file_path, 'r').readlines()[1:]]
+        return dict((int(c[0]), {'faa_lid': c[1], 'region': int(c[2]), 'name': c[3]}) for c in ids)
+
     def _read_point_files(self):
         ''' read all the SMOKE-ready FF10 point files for aicraft emissions,
             and split those emissions by airport
@@ -389,7 +396,7 @@ class EmissionsReader(object):
                 facs_not_found.add(str(fac_id))
                 continue
             facility = self.facility_ids[fac_id]
-            region = facility['gai']
+            region = facility['region']
             if region not in self.regions: continue
             eic = int(ln[11])
             if eic not in self.eics:
