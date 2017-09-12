@@ -35,7 +35,7 @@ FLIGHT_FRACTS_FILE = 'input/default/flight_stage_fractions_20161004.csv'
 CATEGORIES_FILE = 'input/default/aircraft_categories.py'
 AREA_FILES = ['input/emis/example_area_aircraft_ca_2012.ff10']
 POINT_FILES = ['input/emis/example_point_aircraft_ca_2012.ff10']
-GAI_CODES_FILE = 'input/default/gai_codes.py'
+REGION_STRINGS_FILE = 'input/default/region_strings.csv'
 FACILITY_ID_FILE = 'input/default/facility_ids.py'
 ## TEMPORAL INFO
 TEMPORAL_FILE = 'input/temporal/aircraft_temporal_profiles_2002-2015_v1.csv'
@@ -61,8 +61,8 @@ def main():
               'TAKEOFF_ANGLES': TAKEOFF_ANGLES, 'LAND_ANGLES': LAND_ANGLES,
               'RUNWAY_FILE': RUNWAY_FILE, 'FLIGHT_FRACTS_FILE': FLIGHT_FRACTS_FILE,
               'CATEGORIES_FILE': CATEGORIES_FILE, 'AREA_FILES': AREA_FILES,
-              'POINT_FILES': POINT_FILES, 'GAI_CODES_FILE': GAI_CODES_FILE,
-              'FACILITY_ID_FILE': FACILITY_ID_FILE, 'TEMPORAL_FILE': TEMPORAL_FILE,
+              'POINT_FILES': POINT_FILES, 'FACILITY_ID_FILE': FACILITY_ID_FILE,
+              'TEMPORAL_FILE': TEMPORAL_FILE, 'REGION_STRINGS_FILE': REGION_STRINGS_FILE,
               'VERSION': VERSION, 'GSPRO_FILE': GSPRO_FILE, 'GSREF_FILE': GSREF_FILE,
               'WEIGHT_FILE': WEIGHT_FILE, 'OUT_DIR': OUT_DIR, 'SHOULD_ZIP': SHOULD_ZIP,
               'PRINT_TOTALS': PRINT_TOTALS}
@@ -109,37 +109,37 @@ Usage: ./GATE.py [-FLAGS]
 Create 3D CMAQ-ready NetCDF files for aircraft emissions.
 
 Optional Arguments:
-  -DATES               dates to model aircraft emissions
-  -DATE_FORMAT         Python datetime format string for the above
-  -THREE_DAY_MONTH     True if each month can be represented by 3 days
-  -BASE_YEAR           base year
-  -REGIONS             numerical region list
-  -NUM_PROCS           number of parallel processes to run (1 per day)
-  -GRID_DOT_FILE       path to CMAQ GRIDDOT2D file
-  -MET_ZF_FILE         path to CMAQ METCRO3D file
-  -NCOLS               number of columns in modeling domain
-  -NROWS               number of rows in modeling domain
-  -NLAYERS             total number of vertical layers
-  -NUM_NONZERO_LAYERS  number of vertical layers with emissions
-  -ABL_METERS          height of the ABL, in meters
-  -REGION_BOX_FILE     path to Python file with I/J box for each region
-  -TAKEOFF_ANGLES      take-off angles to model
-  -LAND_ANGLES         landing angles to model
-  -RUNWAY_FILE         path to CSV with lat/lons for all runways
-  -FLIGHT_FRACTS_FILE  path to CSV for species fractions by flight stage
-  -CATEGORIES_FILE     path to Python file with aircraft EIC codes
-  -AREA_FILES          path to FF10 file with area source emissions
-  -POINT_FILES         path to CSV file with point source emissions
-  -GAI_CODES_FILE      path to Python file with region code information
-  -FACILITY_ID_FILE    path to Python file with airport FAA codes
-  -TEMPORAL_FILE       path to CSV file with airport temporal profiles
-  -VERSION             string used to identify the run
-  -GSPRO_FILE          path to SMOKE-style GSPRO file
-  -GSREF_FILE          path to SMOKE-style GSREF file
-  -WEIGHT_FILE         path to file with molecular weights
-  -OUT_DIR             path to output directory
-  -SHOULD_ZIP          True if you want to gzip outputs, False otherwise
-  -PRINT_TOTALS        True if you want to print totals to stdout
+  -DATES                dates to model aircraft emissions
+  -DATE_FORMAT          Python datetime format string for the above
+  -THREE_DAY_MONTH      True if each month can be represented by 3 days
+  -BASE_YEAR            base year
+  -REGIONS              numerical region list
+  -NUM_PROCS            number of parallel processes to run (1 per day)
+  -GRID_DOT_FILE        path to CMAQ GRIDDOT2D file
+  -MET_ZF_FILE          path to CMAQ METCRO3D file
+  -NCOLS                number of columns in modeling domain
+  -NROWS                number of rows in modeling domain
+  -NLAYERS              total number of vertical layers
+  -NUM_NONZERO_LAYERS   number of vertical layers with emissions
+  -ABL_METERS           height of the ABL, in meters
+  -REGION_BOX_FILE      path to Python file with I/J box for each region
+  -TAKEOFF_ANGLES       take-off angles to model
+  -LAND_ANGLES          landing angles to model
+  -RUNWAY_FILE          path to CSV with lat/lons for all runways
+  -FLIGHT_FRACTS_FILE   path to CSV for species fractions by flight stage
+  -CATEGORIES_FILE      path to Python file with aircraft EIC codes
+  -AREA_FILES           path to FF10 file with area source emissions
+  -POINT_FILES          path to CSV file with point source emissions
+  -REGION_STRINGS_FILE  path to Python file with region code information
+  -FACILITY_ID_FILE     path to Python file with airport FAA codes
+  -TEMPORAL_FILE        path to CSV file with airport temporal profiles
+  -VERSION              string used to identify the run
+  -GSPRO_FILE           path to SMOKE-style GSPRO file
+  -GSREF_FILE           path to SMOKE-style GSREF file
+  -WEIGHT_FILE          path to file with molecular weights
+  -OUT_DIR              path to output directory
+  -SHOULD_ZIP           True if you want to gzip outputs, False otherwise
+  -PRINT_TOTALS         True if you want to print totals to stdout
 
 This program can be run without commandline arguments by setting config
 variables in the script.
@@ -278,7 +278,8 @@ class EmissionsReader(object):
         self.scc2eic = cats['scc2eic']
         self.helicopter_sccs = cats['helicopter_sccs']  # TODO: Unused!
         self.regions = config['REGIONS']
-        self.gai_codes = eval(open(config['GAI_CODES_FILE'], 'r').read())
+        rsf = config['REGION_STRINGS_FILE']
+        self.region_strings = dict((c[1], int(c[0])) for c in [l.rstrip().split(',') for l in open(rsf, 'r').readlines()[1:]])
         self.facility_ids = eval(open(config['FACILITY_ID_FILE'], 'r').read())
         self.airports = SpatialSurrogateBuilder.read_runways(config['RUNWAY_FILE'])
         self.airport_emis = {}
@@ -318,7 +319,7 @@ class EmissionsReader(object):
             if line.startswith('#'): continue
             ln = line.split(',')
             if len(ln) < 10: continue
-            region = self.gai_codes[ln[0] + ln[1] + ln[2]]
+            region = self.region_strings[ln[0] + ln[1] + ln[2]]
             if region not in self.regions: continue
             eic = int(ln[5])
             if eic not in self.eics:
@@ -427,7 +428,6 @@ class TemporalSurrogateBuilder(object):
         cats = eval(open(config['CATEGORIES_FILE']).read())
         self.eics = cats['eics']
         self.regions = config['REGIONS']
-        self.gai_codes = eval(open(config['GAI_CODES_FILE'], 'r').read())
         self.temp_file = config['TEMPORAL_FILE']
         self.file_profs = self._read_temp_file()
         self.temp_profs = {}
