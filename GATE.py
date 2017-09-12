@@ -29,7 +29,7 @@ REGION_BOX_FILE = 'input/default/region_boxes.csv'
 ## FLIGHT PATH INFO
 TAKEOFF_ANGLES = [radians(10), radians(20), radians(30)]
 LAND_ANGLES = [radians(2.5), radians(3), radians(3.5)]
-RUNWAY_FILE = 'input/default/runway_info_cali.csv'
+RUNWAY_FILE = 'input/default/runway_info_cali_20170912.csv'
 FLIGHT_FRACTS_FILE = 'input/default/flight_stage_fractions_20161004.csv'
 ## EMISSIONS INFO
 CATEGORIES_FILE = 'input/default/aircraft_categories.py'
@@ -1262,10 +1262,18 @@ class DictToNcfWriter(object):
                     ','.join([af.split('/')[-1] for af in config['AREA_FILES']])
         history = "3D-gridded aircraft emissions, created by the GATE model v" + \
                   config['GATE_VERSION'] + " on " + datetime.strftime(datetime.now(), '%Y-%m-%d')
+
+        # hard-coded vertical layer heights
         vglvls = np.float32([1.0, 0.9958, 0.9907, 0.9846, 0.9774, 0.9688, 0.9585, 0.9463, 0.9319,
                   0.9148, 0.8946, 0.8709, 0.8431, 0.8107, 0.7733, 0.6254, 0.293, 0.0788, 0.0])
-        if config['NLAYERS'] > self.nlayers:
+        # validate number of non-zero layers
+        total_layers = config['NLAYERS']
+        if self.nlayers > total_layers:
+            self.nlayers = total_layers
+        # crop layer heights to non-zero layers
+        if total_layers > self.nlayers:
             vglvls = vglvls[:self.nlayers + 1]
+
         # default NetCDF header for on-road emissions on California's 4km modeling domain
         self.header = {'IOAPI_VERSION': "$Id: @(#) ioapi library version 3.1 $" + " "*43,
                        'EXEC_ID': "?"*16 + " "*64,
