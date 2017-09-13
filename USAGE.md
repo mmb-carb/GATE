@@ -101,24 +101,23 @@ This is a float value of the approximate height of the Atmospheric Boundary Laye
 
 #### REGION_BOX_FILE     
 
-> path to Python file with I/J box for each region
+> path to CSV file with I/J box for each region
 
-This is the path to a Python file with the I/J bounding boxes for each region in the modeling domain.  For instance, the California County region bounding box starts like this:
+This is the path to a CSV file with the I/J bounding boxes for each region in the modeling domain.  For instance, the California County region bounding box starts like this:
 
-    {1: {'lat': (176, 195), 'lon': (177, 194)},
-     ...
-     }
+    REGION,LAT_MIN,LAT_MAX,LON_MIN,LON_MAX
+    1,176,195,177,194
+    2,107,158,208,277
 
-In the example above, the key to the dictionary is the region code (`1`), and that region (Alameda County) stretches from grid cell 176 to 195 in the South-to-North direction and grid cells 177 to 194 in the West-to-East direction.
+The example above starts with regions `1` (Alameda county), which stretches from grid cell 176 to 195 in the South-to-North direction and grid cells 177 to 194 in the West-to-East direction.
 
-This simple Python dictionary is provided to greatly improve the efficiency of finding which grid cells each runway lat/lon lies in.  If the user does not know (and cannot calculate) the I/J bounding boxes of each region in their domain, these boxes could be replaced with the entire modeling domain.  For instance, in the California 4km statewide modeling domain this would look like:
+This file is provided to GATE to greatly improve the efficiency of doing one particular piece of math: determining which grid cell a given lat/lon belongs in.  This search is done extensively when trying to relate runway positions to the modeling domain. If the user does not know (and cannot calculate) the I/J bounding boxes of each region in their domain, these boxes can be replaced with the entire modeling domain.  For instance, in the California 4km statewide modeling domain this would look like:
 
-    {1: {'lat': (0, 291), 'lon': (0, 321)},
-     2: {'lat': (0, 291), 'lon': (0, 321)},
-     ...
-     }
+    REGION,LAT_MIN,LAT_MAX,LON_MIN,LON_MAX
+    1,0,291,0,321
+    2,0,291,0,321
 
-GATE will run with default region describes, like the above.  But it should be noted that this will probably make GATE run significantly slower.
+GATE will run with these domain-wide boxes, but it will probably run slower.
 
 #### TAKEOFF_ANGLES      
 
@@ -201,11 +200,9 @@ This file exists so that emissions from aircraft can be placed into the correct 
 
 This is a single Python dictionary saved to a Python file, to explicitly list all of the EIC/SCC categories that will be modeled for aircraft.  The GATE model reads input non-spatial emissions files, which may have any number of emissions categories. This Python file exists so that only aircraft emissions are selected from the input emissions files (listed under the `AREA_FILES` and `POINT_FILES` variables).
 
-This Python dictionary has four keys, that correspond to four category collections:
+This Python dictionary has two keys, that correspond to two aircraft categories:
 
 * **eics** - This is a simple list of all the aircraft EICs.
-* **sccs** - This is a list of all the aircraft SCCs (helicopter and airplane)
-* **helicopter_sccs** - This is a list of just the helicopter SCCs.
 * **scc2eic** - This is a mapping from SCC to EIC.
 
 This file needs to incorporate both EIC and SCC codes because the CARB inventory uses EIC for area sources and SCC for point sources.
@@ -214,33 +211,71 @@ This file needs to incorporate both EIC and SCC codes because the CARB inventory
 
 > path to FF10 file with area source emissions
 
+This FF10 inventory file is the input for the region-wide, pre-gridded aircraft emissions.  That is, if the yearly inventory do not include aircraft emissions for a specific airport or helipad, but just have aircraft emissions for an entire county, those emissions need to go into this file.  It should be noted, this option will accept a list of such files, not just one.
+
+The FF10 format looks much like a CSV, but has a multi-line comment header.  The FF10 format supported by GATE is not an original file format, but is taken direclty from the SMOKE model, version 3.7.  For a complete manual on this file format, see [this section](https://www.cmascenter.org/smoke/documentation/3.7/html/ch08s02.html) of the SMOKE manual.
+
 #### POINT_FILES         
 
 > path to FF10 file with point source emissions
 
-#### GAI_CODES_FILE      
+This FF10 inventory file is the input for the point-source, pre-gridded aircraft emissions.  That is, if the yearly inventory include aircraft emissions for specific airports / helipads, those emissions need to go into this file.  It should be noted, this option will accept a list of such files, not just one.
 
-> path to Python file with region code information
+The FF10 format looks much like a CSV, but has a multi-line comment header.  The FF10 format supported by GATE is not an original file format, but is taken direclty from the SMOKE model, version 3.7.  For a complete manual on this file format, see [this section](https://www.cmascenter.org/smoke/documentation/3.7/html/ch08s02.html) of the SMOKE manual.
 
-The path to a Python file with a single
+#### REGION_STRINGS_FILE      
+
+> path to CSV file with region code information
+
+The path to a CSV file with a mapping from the simple numerical region code to the longer string representing that region in the FF10 emissions inventory files. It is a simple CSV file with the first column being the number and the second column being the string.  The provided example California file starts:
+
+    REGION,STRING
+    1,GBV006002GBU
+    2,GBV006014GBU
 
 #### FACILITY_ID_FILE    
 
-> path to Python file with airport FAA codes
+> path to CSC file with airport FAA codes
+
+This CSV file contains flight code information about airports and helipads.  In specific, it maps a numerical ID for a given facility in the point source inventory (FF10) files, to an official `FFA_LID` code.  The user can include such a mapping for all the airports and helipads in their model, but the FF10 file format for area sources does not include specific airports/helipads, so this file will need be used for area source emissions.
+
+The provide example file that comes with GATE looks like this:
+
+    ID,FAA_LID,REGION,NAME
+    180001,LAX,59,Los Angeles Int Airport
+    180009,SNA,60,John Wayne Airport
+
+The `ID` codes in the first column have to match the point source IDs in the FF10 inventory files.  The `FAA_LID` codes must match the codes used in the `RUNWAY_FILE`. The third column is unused, and exists purely to make this CSV easier to read.
 
 #### TEMPORAL_FILE       
 
 > path to CSV file with airport temporal profiles
 
+This CSV-like file includes all of the temporal profiles need to convert daily/annual inventories into hourly inventories. Each row has four comma-separated pieces of metadata:
+
+* **region** - Region numbers, with the default value `default`.
+* **airport** - Airport codes, with the default value `default`.
+* **eic** - EIC vehicle codes, with the default value `default`.
+* **type** - Must be one of the four temporal profile types (shown below).
+
+After these four metadata identifiers, comes a comma-separated list of numbers that define the temporal profile, defined by (`|`).
+
+The third column identifies which one of the four temporal profiles is being assigned:
+
+* **diurnal_weekday** - 24 columns, giving hourly fractions for a weekday diurnal pattern, sums to 1.0
+* **diurnal_weekend** - 24 columns, giving hourly fractions for a weekend diurnal pattern, sums to 1.0
+* **monthly** - 12 columns, giving month-of-year fractions, sums to 12.0
+* **weekly** - 7 columns, giving day-of-week fractions, sums to 7.0
+
 #### VERSION             
 
 > string used to identify the run
 
+This is a short string with a version number or identifying note.  It is put into the output file names, as an identifier.
+
 #### GSPRO_FILE          
 
 > path to SMOKE-style GSPRO file
-
-This is a short string with a version number or identifying note.  It is put into the output file names, as an identifier.
 
 #### GSREF_FILE          
 
