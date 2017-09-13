@@ -1,8 +1,11 @@
-# GATE Model
+# GATE Model - beta
 
 > Gridded Aircraft Trajectory Emissions Model
 
 GATE is a command-line tool for processing raw aircraft emissions data into spatially and temporally-allocated emissions inventories, suitable for photochemical modeling. GATE is an open-source, Python-based tool designed by the AQPSD branch of the [California EPA][CalEPA]'s [ARB][ARB].
+
+> This is a pre-release Beta version of the GATE Model.
+
 
 ## How to Run GATE
 
