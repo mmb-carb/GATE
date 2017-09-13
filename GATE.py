@@ -130,9 +130,9 @@ Optional Arguments:
   -CATEGORIES_FILE      path to Python file with aircraft EIC codes
   -AREA_FILES           path to FF10 file with area source emissions
   -POINT_FILES          path to FF10 file with point source emissions
-  -REGION_STRINGS_FILE  path to Python file with region code information
+  -REGION_STRINGS_FILE  path to CSV file with region code information
   -FACILITY_ID_FILE     path to CSV file with airport FAA codes
-  -TEMPORAL_FILE        path to CSV file with airport temporal profiles
+  -TEMPORAL_FILE        path to CSV-like file with airport temporal profiles
   -VERSION              string used to identify the run
   -GSPRO_FILE           path to SMOKE-style GSPRO file
   -GSREF_FILE           path to SMOKE-style GSREF file
