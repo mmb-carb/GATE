@@ -9,9 +9,11 @@ What follows is a description of all the configurable variables in the GATE mode
 
 Most Linux users typically prefer to set run parameters via command line.  However, setting parameters inside the script will allow the user to save the script itself as a logged record of the run.
 
+
 ## Run Parameters
 
 It is useful to note when running from the command line that all command line parsing done in GATE is done using spaces as separates between flags and options.  So you cannot put a space in a file path or string without breaking the command-line parsing.
+
 
 #### DATES
 
@@ -21,11 +23,13 @@ This is a list of date strings.  The default format for each date will be `2012-
 
 When configured inside the script, this variable is a list of date strings.  When configured from the command line, multiple dates are comma separated.
 
+
 #### DATE_FORMAT
 
 > Python datetime format string for the above
 
 This is a single string in the Python `datetime` format.  The default value is `%Y-%m-%d`.  For more information on Python `datetime` formats see the [official documentation](https://docs.python.org/2/library/datetime.html#strftime-and-strptime-behavior).
+
 
 #### THREE_DAY_MONTH
 
@@ -35,7 +39,8 @@ If `True`, any month you want to run will be reduce to only three days: the seco
 
 This may seem like a strange option, but it exists to help make GATE more uniform with certain other inventory sectors.
 
-#### BASE_YEAR           
+
+#### BASE_YEAR
 
 > base year
 
@@ -43,7 +48,8 @@ Frequently, the base year and the model year of an inventory are different.  If 
 
 NOTE: The `DATES` and `BASE_YEAR` variable do not allow for GATE to be run for multiple years in one pass.
 
-#### REGIONS             
+
+#### REGIONS
 
 > numerical region list
 
@@ -51,55 +57,64 @@ NOTE: The `DATES` and `BASE_YEAR` variable do not allow for GATE to be run for m
 
 When configured inside the script, this variable is a list of integers.  When configured from the command line, multiple regions are comma separated.
 
-#### NUM_PROCS           
+
+#### NUM_PROCS
 
 > number of parallel processes to run (1 per day)
 
 Each day in a GATE run is independent of the days around it.  So it is possible to run GATE in parallel; one parallel run for each day at maximum.  But the number of parallel runs that your system has resources for is the decision of the user.  The default value for this parameter is one.
 
-#### GRID_DOT_FILE       
+
+#### GRID_DOT_FILE
 
 > path to CMAQ GRIDDOT2D file
 
 This is the path to the CMAQ-formatted `GRIDDOT2D` file. This file defines the lat/lon coordinates of the corners of the grid cells in the modeling domain.  For the most current CMAQ documentation, look [here](https://www.epa.gov/cmaq/cmaq-documentation).
 
-#### MET_ZF_FILE         
+
+#### MET_ZF_FILE
 
 > path to CMAQ METCRO3D file
 
 This is the path to the CMAQ-formatted `METCRO3d` file. Among other things, this file defines the height of all the z-layer grid cells at each I/J location around the modeling domain.  For the most current CMAQ documentation, look [here](https://www.epa.gov/cmaq/cmaq-documentation).
 
-#### NCOLS               
+
+#### NCOLS
 
 > number of columns in modeling domain
 
 An integer representing the number of West-to-East columns in the modeling domain.
 
-#### NROWS               
+
+#### NROWS
 
 > number of rows in modeling domain
 
 An integer representing the number of South-to-North rows in the modeling domain.
 
-#### NLAYERS             
+
+#### NLAYERS
 
 > total number of vertical layers
 
 An integer representing the number of vertical layers in the modeling domain.
 
-#### NUM_NONZERO_LAYERS  
+
+#### NUM_NONZERO_LAYERS
 
 > number of vertical layers with emissions
 
 An integer representing the number of non-zero vertical layers in the modeling domain.  This is a performance bump, because frequently the aircraft emissions will not stretch the entire vertical length of the modeling domain.  If unsure, the best default value here is the number of vertical layers.
 
-#### ABL_METERS          
+
+#### ABL_METERS
 
 > height of the ABL, in meters
 
 This is a float value of the approximate height of the Atmospheric Boundary Layer (ABL) in meters.
 
-#### REGION_BOX_FILE     
+
+#### REGION_BOX_FILE
 
 > path to CSV file with I/J box for each region
 
@@ -119,7 +134,8 @@ This file is provided to GATE to greatly improve the efficiency of doing one par
 
 GATE will run with these domain-wide boxes, but it will probably run slower.
 
-#### TAKEOFF_ANGLES      
+
+#### TAKEOFF_ANGLES
 
 > take-off angles to model
 
@@ -139,7 +155,8 @@ And from the command line that might look like:
 
     -TAKEOFF_ANGLES 0.175,0.349,0.524
 
-#### LAND_ANGLES         
+
+#### LAND_ANGLES
 
 > landing angles to model
 
@@ -155,7 +172,8 @@ And from the command line that might look like:
 
     -LAND_ANGLES 0.0436,0.0524,0.0611
 
-#### RUNWAY_FILE         
+
+#### RUNWAY_FILE
 
 > path to CSV with lat/lons for all runways
 
@@ -186,7 +204,8 @@ It is worth explaining the columns in the above CSV file:
 
 A good source of data for the lat/lon locations of the each end of every runway in America can be found on the commercial [Airport IQ 5010](http://www.gcr1.com/5010web/) website.
 
-#### FLIGHT_FRACTS_FILE  
+
+#### FLIGHT_FRACTS_FILE
 
 > path to CSV for species fractions by flight stage
 
@@ -194,7 +213,8 @@ This is the path to the flight fractions CSV file.  This CSV exists to define wh
 
 This file exists so that emissions from aircraft can be placed into the correct spatial locations with reference to each runway.
 
-#### CATEGORIES_FILE     
+
+#### CATEGORIES_FILE
 
 > path to Python file with aircraft EIC codes
 
@@ -207,7 +227,8 @@ This Python dictionary has two keys, that correspond to two aircraft categories:
 
 This file needs to incorporate both EIC and SCC codes because the CARB inventory uses EIC for area sources and SCC for point sources.
 
-#### AREA_FILES          
+
+#### AREA_FILES
 
 > path to FF10 file with area source emissions
 
@@ -215,7 +236,8 @@ This FF10 inventory file is the input for the region-wide, pre-gridded aircraft 
 
 The FF10 format looks much like a CSV, but has a multi-line comment header.  The FF10 format supported by GATE is not an original file format, but is taken direclty from the SMOKE model, version 3.7.  For a complete manual on this file format, see [this section](https://www.cmascenter.org/smoke/documentation/3.7/html/ch08s02.html) of the SMOKE manual.
 
-#### POINT_FILES         
+
+#### POINT_FILES
 
 > path to FF10 file with point source emissions
 
@@ -223,7 +245,8 @@ This FF10 inventory file is the input for the point-source, pre-gridded aircraft
 
 The FF10 format looks much like a CSV, but has a multi-line comment header.  The FF10 format supported by GATE is not an original file format, but is taken direclty from the SMOKE model, version 3.7.  For a complete manual on this file format, see [this section](https://www.cmascenter.org/smoke/documentation/3.7/html/ch08s02.html) of the SMOKE manual.
 
-#### REGION_STRINGS_FILE      
+
+#### REGION_STRINGS_FILE
 
 > path to CSV file with region code information
 
@@ -233,7 +256,8 @@ The path to a CSV file with a mapping from the simple numerical region code to t
     1,GBV006002GBU
     2,GBV006014GBU
 
-#### FACILITY_ID_FILE    
+
+#### FACILITY_ID_FILE
 
 > path to CSC file with airport FAA codes
 
@@ -247,7 +271,8 @@ The provide example file that comes with GATE looks like this:
 
 The `ID` codes in the first column have to match the point source IDs in the FF10 inventory files.  The `FAA_LID` codes must match the codes used in the `RUNWAY_FILE`. The third column is unused, and exists purely to make this CSV easier to read.
 
-#### TEMPORAL_FILE       
+
+#### TEMPORAL_FILE
 
 > path to CSV file with airport temporal profiles
 
@@ -267,31 +292,62 @@ The third column identifies which one of the four temporal profiles is being ass
 * **monthly** - 12 columns, giving month-of-year fractions, sums to 12.0
 * **weekly** - 7 columns, giving day-of-week fractions, sums to 7.0
 
-#### VERSION             
+
+#### VERSION
 
 > string used to identify the run
 
 This is a short string with a version number or identifying note.  It is put into the output file names, as an identifier.
 
-#### GSPRO_FILE          
+
+#### GSPRO_FILE
 
 > path to SMOKE-style GSPRO file
 
-#### GSREF_FILE          
+The GSPRO and GSREF files together form a complete mapping from EIC-source category to chemical speciation.  The GSPRO and GSREF file formats were chosen from SMOKE v3.7 so that they would be standard formats that people in the community would already be familiar with.  You can find a detailed explaination of the GSPRO file format in the official documentation [here](https://www.cmascenter.org/smoke/documentation/3.7/html/ch08s05s02.html).
+
+
+#### GSREF_FILE
 
 > path to SMOKE-style GSREF file
 
-#### WEIGHT_FILE         
+The GSPRO and GSREF files together form a complete mapping from EIC-source category to chemical speciation.  The GSPRO and GSREF file formats were chosen from SMOKE v3.7 so that they would be standard formats that people in the community would already be familiar with.  You can find a detailed explaination of the GSREF file format in the official documentation [here](https://www.cmascenter.org/smoke/documentation/3.7/html/ch08s05s04.html).
+
+
+#### WEIGHT_FILE
 
 > path to file with molecular weights
 
-#### OUT_DIR             
+The molecular weights text file simply provides the molecular weights for all the model species the user wants to output. It also provides the model a little metadata that is needed to speciation criteria pollutants.  The file can either be fixed format:
+
+    NO          30.006      NOX     moles/s
+    NO2         46.006      NOX     moles/s
+    HONO        47.013      NOX     moles/s
+
+Or CSV format:
+
+    NO,30.006,NOX,moles/s
+    NO2,46.006,NOX,moles/s
+    HONO,47.013,NOX,moles/s
+
+Either format is acceptable.  While the CSV format is more in keeping with the rest of the GATE model, the fixed format will be more familiar to SMOKE users.  Either way, both are supported.
+
+There are four columns in this file:
+
+* **1** - species name
+* **2** - molecular weight
+* **3** - criteria pollutant this species belongs to
+* **4** - units, for display in final NetCDF file
+
+
+#### OUT_DIR
 
 > path to output directory
 
 This is the path to a directory for output files.  If this directory does not exist, GATE will try and create it.
 
-#### SHOULD_ZIP          
+
+#### SHOULD_ZIP
 
 > True if you want to gzip outputs, False otherwise
 
@@ -308,7 +364,7 @@ But from the command line, it must be configured using a string:
     -SHOULD_ZIP False
 
 
-#### PRINT_TOTALS        
+#### PRINT_TOTALS
 
 > True if you want to print totals to stdout
 
