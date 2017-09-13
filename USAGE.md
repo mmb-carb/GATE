@@ -324,7 +324,7 @@ The molecular weights text file simply provides the molecular weights for all th
     NO2         46.006      NOX     moles/s
     HONO        47.013      NOX     moles/s
 
-Or CSV format:
+Or in a headerless CSV format:
 
     NO,30.006,NOX,moles/s
     NO2,46.006,NOX,moles/s
