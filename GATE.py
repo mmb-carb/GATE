@@ -129,7 +129,7 @@ Optional Arguments:
   -FLIGHT_FRACTS_FILE   path to CSV for species fractions by flight stage
   -CATEGORIES_FILE      path to Python file with aircraft EIC codes
   -AREA_FILES           path to FF10 file with area source emissions
-  -POINT_FILES          path to CSV file with point source emissions
+  -POINT_FILES          path to FF10 file with point source emissions
   -REGION_STRINGS_FILE  path to Python file with region code information
   -FACILITY_ID_FILE     path to CSV file with airport FAA codes
   -TEMPORAL_FILE        path to CSV file with airport temporal profiles
