@@ -1298,7 +1298,7 @@ class DictToNcfWriter(object):
                        'VGTOP': np.float32(10000.0),  # Domain: Top Vertical layer at 10km
                        'VGLVLS': vglvls,       # Domain: Vertical layer locations
                        'GDNAM': "CMAQ Emissions  ",
-                       'UPNAM': "combineEmis_wdwe",
+                       'UPNAM': "GATE",
                        'FILEDESC': file_desc,
                        'HISTORY': history}
         # Read speciation profiles & molecular weight files
