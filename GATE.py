@@ -1367,12 +1367,53 @@ class DictToNcfWriter(object):
                 print('\t\t\t' + str(eic))
 
         if self.print_totals:
-            self._print_totals_to_csv(ncf, in_emis, scaled_emissions, out_path)
+            self._print_input_totals(in_emis, out_path)
+            self._print_output_totals(ncf, in_emis, scaled_emissions, out_path)
 
         ncf.close()
 
-    def _print_totals_to_csv(self, ncf, emis, scaled_emis, out_path):
-        ''' if requested, print a simple CSV of totals, by pollutant
+    def _print_input_totals(self, emis, out_path):
+        ''' If requested, print a CSV of the input emissions totals.
+            Input data is in dictionaries of the form:
+            emis[region][airport][eic][poll] => tons/day
+            scaled_emis[eic][hr][poll][cell] => tons/hr
+        '''
+        # create input pollutant totals, by region and EIC
+        polls = set()
+        in_totals = {}
+        for region, airport_emis in emis.iteritems():
+            if region not in in_totals:
+                in_totals[region] = {}
+            for eic_emis in airport_emis.itervalues():
+                for eic, poll_emis in eic_emis.iteritems():
+                    if eic not in in_totals[region]:
+                        in_totals[region][eic] = {}
+                    for poll, value in poll_emis.iteritems():
+                        if poll not in in_totals:
+                            polls.add(poll)
+                            in_totals[region][eic][poll] = 0.0
+                        in_totals[region][eic][poll] += value
+
+        # write output file
+        polls = sorted(polls)
+        fout = open(out_path.replace('.ncf', '.input_totals.csv'), 'w')
+        fout.write('Region,SCC/EIC,' + ','.join(polls) + '\n')
+
+        # write totals totals
+        for region, region_data in in_totals.iteritems():
+            for eic, eic_data in region_data.iteritems():
+                line = str(region) + ',' + str(eic)
+                for poll in polls:
+                    line += ','
+                    if poll in eic_data:
+                        line += str(eic_data[poll])
+                fout.write(line + '\n')
+
+        fout.close()
+
+    def _print_output_totals(self, ncf, emis, scaled_emis, out_path):
+        ''' If requested, print a CSV of the output emissions totals.
+            Input data is in dictionaries of the form:
             emis[region][airport][eic][poll] => tons/day
             scaled_emis[eic][hr][poll][cell] => tons/hr
         '''
@@ -1411,7 +1452,7 @@ class DictToNcfWriter(object):
                         scaled_totals[poll] += value
 
         # write output file
-        fout = open(out_path.replace('.ncf', '.totals.csv'), 'w')
+        fout = open(out_path.replace('.ncf', '.output_totals.csv'), 'w')
         fout.write('Pollutant,Input(tons/day),After Scaling(tons/day),Output(tons/day)\n')
 
         # write pollutant totals
