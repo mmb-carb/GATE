@@ -741,37 +741,6 @@ class SpatialSurrogateBuilder(object):
         for key in d:
             d[key] *= factor
 
-    def pprint_surrogate(self):
-        ''' Test print method to inspect spatial surrogates
-        '''
-        print('\nSpatial Surrogates (Just for testing purposes)\n')
-        # configurables: what to plot
-        AIRPORT = "SFO"
-        POLLUTANTS = ['CO', 'NOX', 'PM']
-        EIC = 81080011400000
-        # configurables: color scheme
-        bounds = [0.0001, 0.001, 0.01, 0.025, 0.05, 0.06, 0.08, 0.1, 1.0]
-        COLOR_SCHEME = ['#FF99FF', '#AA54FF', '#0000FF', '#0080FF',  # Rainbow: Red to Purple
-                        '#58FAF4', '#00FF00', '#FFFF00', '#FF8000', '#FF0000']
-
-        # print with colors
-        for region, airports in self.surrogates.iteritems():
-            for airport, eic_data in airports.iteritems():
-                if airport != AIRPORT: continue
-                for eic, poll_data in eic_data.iteritems():
-                    if eic != EIC: continue
-                    for poll, surr_data in poll_data.iteritems():
-                        if poll not in POLLUTANTS: continue
-                        s = {}
-                        for key,value in surr_data.iteritems():
-                            for i in xrange(len(COLOR_SCHEME)):
-                                if value <= bounds[i]:
-                                    s[key] = COLOR_SCHEME[i]
-                                    break
-
-                        print(region, airport, eic, poll)
-                        print([(coord, color) for coord,color in s.iteritems()])
-
     @staticmethod
     def read_region_box_file(file_path):
         ''' Read the region box CSV file into a custom dictionary
