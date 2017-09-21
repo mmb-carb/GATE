@@ -42,7 +42,7 @@ TEMPORAL_FILE = 'input/temporal/aircraft_temporal_profiles_2002-2015_v1.csv'
 ## OUTPUT INFO
 VERSION = 'v0100'
 GSPRO_FILE = 'input/ncf/gspro.cmaq.saprc.31dec2015.all.csv'
-GSREF_FILE = 'input/ncf/gsref_28july2016_2012s.txt'
+GSREF_FILE = 'input/ncf/gsref_28july2016_2012.txt'
 WEIGHT_FILE = 'input/ncf/molecular.weights.txt'
 OUT_DIR = 'output/'
 SHOULD_ZIP = True
