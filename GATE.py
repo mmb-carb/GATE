@@ -35,7 +35,7 @@ FLIGHT_FRACTS_FILE = 'input/default/flight_stage_fractions_20161004.csv'
 CATEGORIES_FILE = 'input/default/aircraft_categories.py'
 AREA_FILES = ['input/emis/example_area_aircraft_ca_2012.ff10']
 POINT_FILES = ['input/emis/example_point_aircraft_ca_2012.ff10']
-REGION_STRINGS_FILE = 'input/default/region_strings.csv'
+REGION_STRINGS_FILE = 'input/default/region_strings_AB_FIPS_DIS.csv'
 FACILITY_ID_FILE = 'input/default/facility_ids.csv'
 ## TEMPORAL INFO
 TEMPORAL_FILE = 'input/temporal/aircraft_temporal_profiles_2002-2015_v1.csv'
