@@ -250,11 +250,26 @@ The FF10 format looks much like a CSV, but has a multi-line comment header.  The
 
 > path to CSV file with region code information
 
-The path to a CSV file with a mapping from the simple numerical region code to the longer string representing that region in the FF10 emissions inventory files. It is a simple CSV file with the first column being the number and the second column being the string.  The provided example California file starts:
+The path to a simple CSV file mapping an integer region code to the regional information in the input FF10 emissions files.  The SMOKE FF10 format provides three CSV columns of data to completely define a region.  Depending on your personal FF10 format, you may want to re-create this file with a different second column.
+
+GATE comes provided with a couple different versions of the `region_strings.csv` file. These examples are used to support California modeling. However, this file could easily be replaced to match the user's modeling.
+
+For instance, if the user is creating their own FF10 files from scratch, they may want to entirely forego the first and third columns and just make the second column their region code:
+
+    #FORMAT   FF10_NONPOINT
+    #...
+    #DESC     AIR_BASIN,REGION_CODE,DISTRICT,...
+    ,1,,...
+    ,2,,...
+    ...
+
+Then their `region_strings.csv` file would be trivial:
 
     REGION,STRING
-    1,GBV006002GBU
-    2,GBV006014GBU
+    1,1
+    2,2
+    3,3
+    ...
 
 
 #### FACILITY_ID_FILE
@@ -291,6 +306,8 @@ The third column identifies which one of the four temporal profiles is being ass
 * **diurnal_weekend** - 24 columns, giving hourly fractions for a weekend diurnal pattern, sums to 1.0
 * **monthly** - 12 columns, giving month-of-year fractions, sums to 12.0
 * **weekly** - 7 columns, giving day-of-week fractions, sums to 7.0
+
+The example data provided with the model is for California, and comes from a data pull done on the U.S. Beauro of Transportation Statistics [website](https://www.transtats.bts.gov/databases.asp?Mode_ID=1&Mode_Desc=Aviation&Subject_ID2=0) on December 20, 2016.
 
 
 #### VERSION
