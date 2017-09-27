@@ -1389,7 +1389,7 @@ class DictToNcfWriter(object):
                     if eic not in in_totals[region]:
                         in_totals[region][eic] = {}
                     for poll, value in poll_emis.iteritems():
-                        if poll not in in_totals:
+                        if poll not in in_totals[region][eic]:
                             polls.add(poll)
                             in_totals[region][eic][poll] = 0.0
                         in_totals[region][eic][poll] += value
