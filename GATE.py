@@ -152,7 +152,7 @@ Report bugs to <https://github.com/mmb-carb/GATE/issues>.
 
 class GATE(object):
 
-    GATE_VERSION = '0.3.0'
+    GATE_VERSION = '0.3.1'
 
     def __init__(self, config):
         ''' build  each step of the model '''
@@ -188,8 +188,8 @@ class GATE(object):
             Scale emissions for a single date and write them to a CMAQ-ready NetCDF file.
         '''
         for date in dates:
-            scaled_emis = self.emis_scale.scale(emis, spat_surrs, temp_surrs, date)
-            self.ncdf_write.write(scaled_emis, emis, date)
+            scaled_emis, daily_emis = self.emis_scale.scale(emis, spat_surrs, temp_surrs, date)
+            self.ncdf_write.write(scaled_emis, daily_emis, emis, date)
 
     def _parse_dates(self, config):
         ''' Allow for implicit data ranges by using ellipsis:
@@ -1161,9 +1161,12 @@ class EmissionsScaler(object):
         '''
         print('\t\tScaling & Writing: ' + date)
         scaled_emis = {}
+        daily_emis = {}
         temporal = temp_surrs[date]
 
         for region, region_emis in emis.iteritems():
+            if region not in daily_emis:
+                daily_emis[region] = {}
 
             for airport, airport_emis in region_emis.iteritems():
                 surrs = spat_surrs[region][airport]
@@ -1173,6 +1176,8 @@ class EmissionsScaler(object):
                     diurnal = diurnal_by_eic[eic] if eic in diurnal_by_eic else diurnal_by_eic[self.DEFAULT]
                     if eic not in scaled_emis:
                         scaled_emis[eic] = dict((hr, {}) for hr in range(24))
+                    if eic not in daily_emis[region]:
+                        daily_emis[region][eic] = {}
 
                     for hr in xrange(24):
                         fraction_hr = diurnal[hr]
@@ -1180,17 +1185,19 @@ class EmissionsScaler(object):
                             continue
 
                         for poll, val in polls.iteritems():
-
                             if poll not in scaled_emis[eic][hr]:
                                 scaled_emis[eic][hr][poll] = {}
+                            if poll not in daily_emis[region][eic]:
+                                daily_emis[region][eic][poll] = 0.0
                             val0 = val * fraction_hr
+                            daily_emis[region][eic][poll] += val0
 
                             for cell, fraction_cell in surrs[eic][poll].iteritems():
                                 if cell not in scaled_emis[eic][hr][poll]:
                                     scaled_emis[eic][hr][poll][cell] = 0.0
                                 scaled_emis[eic][hr][poll][cell] += val0 * fraction_cell
 
-        return scaled_emis
+        return scaled_emis, daily_emis
 
 
 class DictToNcfWriter(object):
@@ -1275,7 +1282,7 @@ class DictToNcfWriter(object):
         self._load_gsref()
         self._load_gspro()
 
-    def write(self, scaled_emis, in_emis, date):
+    def write(self, scaled_emis, daily_emis, in_emis, date):
         ''' Write a CMAQ-ready NetCDF file for a single day
         '''
         # get Julian date
@@ -1287,13 +1294,13 @@ class DictToNcfWriter(object):
         ncf, gmt_shift = self._create_netcdf(out_path, dt, jdate)
 
         # fill netcdf file with data
-        self._fill_grid(in_emis, scaled_emis, date, ncf, gmt_shift, out_path)
+        self._fill_grid(in_emis, daily_emis, scaled_emis, date, ncf, gmt_shift, out_path)
 
         # compress output file
         if self.should_zip:
             os.system('gzip -1 ' + out_path)
 
-    def _fill_grid(self, in_emis, scaled_emissions, date, ncf, gmt_shift, out_path):
+    def _fill_grid(self, in_emis, daily_emis, scaled_emissions, date, ncf, gmt_shift, out_path):
         ''' Fill the entire modeling domain with a 3D grid for each pollutant.
             Fill the emissions values in each grid cell, for each polluant.
             Create a separate grid set for each date.
@@ -1367,40 +1374,25 @@ class DictToNcfWriter(object):
                 print('\t\t\t' + str(eic))
 
         if self.print_totals:
-            self._print_input_totals(in_emis, out_path)
-            self._print_output_totals(ncf, in_emis, scaled_emissions, out_path)
+            self._print_daily_totals(daily_emis, out_path)
+            self._print_input_output_comparison(ncf, in_emis, daily_emis, out_path)
 
         ncf.close()
 
-    def _print_input_totals(self, emis, out_path):
-        ''' If requested, print a CSV of the input emissions totals.
+    def _print_daily_totals(self, daily_emis, out_path):
+        ''' If requested, print a CSV of the scaled emissions totals.
             Input data is in dictionaries of the form:
-            emis[region][airport][eic][poll] => tons/day
-            scaled_emis[eic][hr][poll][cell] => tons/hr
+            daily_emis[region][eic][poll] => tons/day
         '''
-        # create input pollutant totals, by region and EIC
-        polls = set()
-        in_totals = {}
-        for region, airport_emis in emis.iteritems():
-            if region not in in_totals:
-                in_totals[region] = {}
-            for eic_emis in airport_emis.itervalues():
-                for eic, poll_emis in eic_emis.iteritems():
-                    if eic not in in_totals[region]:
-                        in_totals[region][eic] = {}
-                    for poll, value in poll_emis.iteritems():
-                        if poll not in in_totals[region][eic]:
-                            polls.add(poll)
-                            in_totals[region][eic][poll] = 0.0
-                        in_totals[region][eic][poll] += value
+        # default criteria pollutants
+        polls = ['CO', 'NOX', 'SOX', 'TOG', 'PM', 'NH3']
 
         # write output file
-        polls = sorted(polls)
-        fout = open(out_path.replace('.ncf', '.input_totals.csv'), 'w')
-        fout.write('Region,SCC/EIC,' + ','.join(polls) + '\n')
+        fout = open(out_path.replace('.ncf', '.daily_totals.csv'), 'w')
+        fout.write('Region,EIC,Pollutant,' + ','.join(polls) + ' (tons/day)\n')
 
         # write totals totals
-        for region, region_data in in_totals.iteritems():
+        for region, region_data in daily_emis.iteritems():
             for eic, eic_data in region_data.iteritems():
                 line = str(region) + ',' + str(eic)
                 for poll in polls:
@@ -1411,11 +1403,11 @@ class DictToNcfWriter(object):
 
         fout.close()
 
-    def _print_output_totals(self, ncf, emis, scaled_emis, out_path):
+    def _print_input_output_comparison(self, ncf, emis, daily_emis, out_path):
         ''' If requested, print a CSV of the output emissions totals.
             Input data is in dictionaries of the form:
             emis[region][airport][eic][poll] => tons/day
-            scaled_emis[eic][hr][poll][cell] => tons/hr
+            daily_emis[region][eic][poll]] => tons/day
         '''
         # find species position by pollutant
         species = {}
@@ -1443,17 +1435,16 @@ class DictToNcfWriter(object):
 
         # create scaled emissions totals
         scaled_totals = {}
-        for eic_emis in scaled_emis.itervalues():
-            for hourly in eic_emis.itervalues():
-                for poll, cell_data in hourly.iteritems():
-                    for value in cell_data.itervalues():
-                        if poll not in scaled_totals:
-                            scaled_totals[poll] = 0.0
-                        scaled_totals[poll] += value
+        for region_emis in daily_emis.itervalues():
+            for eic_emis in region_emis.itervalues():
+                for poll, value in eic_emis.iteritems():
+                    if poll not in scaled_totals:
+                        scaled_totals[poll] = 0.0
+                    scaled_totals[poll] += value
 
         # write output file
-        fout = open(out_path.replace('.ncf', '.output_totals.csv'), 'w')
-        fout.write('Pollutant,Input(tons/day),After Scaling(tons/day),Output(tons/day)\n')
+        fout = open(out_path.replace('.ncf', '.input_output_comparison.csv'), 'w')
+        fout.write('Pollutant,Input Files(tons/day),After Scaling(tons/day),NCF Output(tons/day)\n')
 
         # write pollutant totals
         for poll in sorted(in_totals.keys()):
