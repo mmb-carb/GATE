@@ -48,8 +48,6 @@ OUT_DIR = 'output/'
 SHOULD_ZIP = True
 PRINT_TOTALS = False
 
-DATES = ['2012-07-24']
-REGIONS = range(1, 8)
 
 def main():
     """ parse the command-line options and execute the program
