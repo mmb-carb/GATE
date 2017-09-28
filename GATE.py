@@ -48,6 +48,8 @@ OUT_DIR = 'output/'
 SHOULD_ZIP = True
 PRINT_TOTALS = False
 
+DATES = ['2012-07-24']
+REGIONS = range(1, 8)
 
 def main():
     """ parse the command-line options and execute the program
@@ -1101,12 +1103,12 @@ class SpatialSurrogateBuilder(object):
         # parse header for column numbers
         header = f.readline().rstrip().lower().split(',')
         airport_col = header.index('airport') if 'airport' in header else 0
-        regions_col = header.index('region') if 'region' else 1
-        flights_col = header.index('flights') if 'flights' else 3
-        landlat_col = header.index('land_lat') if 'land_lat' else 4
-        landlon_col = header.index('land_lon') if 'land_lon' else 5
-        takelat_col = header.index('takeoff_lat') if 'takeoff_lat' else 6
-        takelon_col = header.index('takeoff_lon') if 'takeoff_lon' else 7
+        regions_col = header.index('region') if 'region' in header else 1
+        flights_col = header.index('flights') if 'flights' in header else 3
+        landlat_col = header.index('land_lat') if 'land_lat' in header else 4
+        landlon_col = header.index('land_lon') if 'land_lon' in header else 5
+        takelat_col = header.index('takeoff_lat') if 'takeoff_lat' in header else 6
+        takelon_col = header.index('takeoff_lon') if 'takeoff_lon' in header else 7
 
         # read file, line by line
         for line in f.xreadlines():
