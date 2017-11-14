@@ -31,7 +31,10 @@ Or you can mix and match multiple flags. If you wanted to just run the Los Angel
 
     python GATE.py -VERSION v0900 -REGIONS 59,68 -DATES 2012-07-18 -SHOULD_ZIP False
 
-For a more detailed explaination of the config options in GATE see the [Usage Guide](USAGE.md).
+For a more detailed explaination of the config options in GATE see the [User's Guide](https://github.com/mmb-carb/GATE_Documentation/blob/master/docs/USER_GUIDE.md).
+
+For more information about the GATE model and how it works, see the [GATE Documentation](https://github.com/mmb-carb/GATE_Documentation).
+
 
 ## Open-Source Licence
 
