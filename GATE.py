@@ -363,7 +363,7 @@ class EmissionsReader(object):
 
     @staticmethod
     def read_facility_file(file_path):
-        ''' read the airport/helipad information CSV into a custom dictionary
+        ''' read the airport information CSV into a custom dictionary
         '''
         ids = [l.rstrip().split(',') for l in open(file_path, 'r').readlines()[1:]]
         return dict((int(c[0]), {'faa_lid': c[1], 'region': int(c[2]), 'name': c[3]}) for c in ids)
@@ -648,8 +648,6 @@ class SpatialSurrogateBuilder(object):
                     self.surrogates[region][location] = {}
 
                 # build a spatial surrogate for a single location
-                if location_data['helipads']:
-                    self._build_helipad(location, location_data['helipads'], region)
                 if location_data['runways']:
                     self._build_airport(location, location_data['runways'], region)
 
@@ -703,27 +701,7 @@ class SpatialSurrogateBuilder(object):
                     self.add_dict(surr, toff1)
                     # add to final spatial surrogate collection
                     self.surrogates[region][airport][eic][poll] = surr
-
-    def _build_helipad(self, loc, helipads, region):
-        ''' Build a spatial surrogate for a single helipad.
-            NOTE: This is a default, single vertical column, to be improved.
-        '''
-        for helipad in helipads:
-            # build default helipad spatial surrogate
-            num_levels = 5
-            cell0 = tuple(self.find_grid_cell((0.0, helipad[1], helipad[0]), region))
-            helicopter_surr = {cell0: 1.0 / num_levels}
-            for i in xrange(1, num_levels):
-                cell_new = (i, cell0[1], cell0[2])
-                helicopter_surr = {cell_new: 1.0 / num_levels}
-
-            # fill surrogates by eic and pollutant
-            for eic, poll_fracts in self.flight_fracts.iteritems():
-                if eic not in self.surrogates[region][loc]:
-                    self.surrogates[region][loc][eic] = {}
-                for poll in poll_fracts.iterkeys():
-                    self.surrogates[region][loc][eic][poll] = helicopter_surr.copy()
-
+                    
     @staticmethod
     def add_dict(orig, new):
         ''' sum the element in two flat dictionaries
@@ -1118,24 +1096,17 @@ class SpatialSurrogateBuilder(object):
             flights = int(float(ln[flights_col]))
             land_lat = float(ln[landlat_col])
             land_lon = float(ln[landlon_col])
-            if ln[takelat_col] == 'H':
-                is_helipad = True
-            else:
-                is_helipad = False
-                take_lat = float(ln[takelat_col])
-                take_lon = float(ln[takelon_col])
+            take_lat = float(ln[takelat_col])
+            take_lon = float(ln[takelon_col])
 
             # fill output dict
             if region not in airports:
                 airports[region] = {}
             if airport not in airports[region]:
-                airports[region][airport] = {'flights': 0, 'runways': [], 'helipads': []}
+                airports[region][airport] = {'flights': 0, 'runways': []}
             airports[region][airport]['flights'] += flights
-            if not is_helipad:
-                airports[region][airport]['runways'].append((land_lat, land_lon, take_lat, take_lon))
-            else:
-                airports[region][airport]['helipads'].append((land_lat, land_lon))
-
+            airports[region][airport]['runways'].append((land_lat, land_lon, take_lat, take_lon))
+           
         return airports
 
 
