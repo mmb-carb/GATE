@@ -172,7 +172,7 @@ class GATE(object):
         '''
         print('\nRunning GATE Model v' + self.GATE_VERSION)
         emis = self.emis_readr.read()
-        temp_surrs = self.temp_build.build(emis.keys())
+        temp_surrs = self.temp_build.build()
         spat_surrs = self.spat_build.build(emis.keys())
         print('\tScaling Emissions & Writing Outputs')
 
@@ -433,24 +433,13 @@ class TemporalSurrogateBuilder(object):
         self.dates = [datetime.strptime(d, self.date_format) for d in sorted(set(config['DATES']))]
         cats = eval(open(config['CATEGORIES_FILE']).read())
         self.eics = cats['eics']
-        self.regions = config['REGIONS']
         self.temp_file = config['TEMPORAL_FILE']
         self.file_profs = self._read_temp_file()
         self.temp_profs = {}
 
-    def build(self, regions=False):
-        ''' read temporal profile dict by: region (w/ default), month, DOW, and hour
-        '''
-        print('\tBuilding Temporal Profiles')
-        # pull regions from emissions files, if you can
-        if regions:
-            self.regions = regions
-
-        return self._build_daily_profiles()
-
-    def _build_daily_profiles(self):
-        ''' generate the final daily, regional, and hourly profiles,
-            after combining the monthly, weekly, and diurnal profiles.
+    def build(self):
+        ''' read temporal profile dict by: airport, EIC
+            create diurnal profiles for: monthly, weekly, and diurnal
         '''
         self.temp_profs = {}
         # create a full set of scaling factors for each date
@@ -459,54 +448,51 @@ class TemporalSurrogateBuilder(object):
             self.temp_profs[d_str] = {}
             dow = datetime(self.base_year, d.month, d.day).weekday()
             month = d.month - 1
-            # create temporal factors for each region
-            for region in self.regions:
-                self.temp_profs[d_str][region] = {}
-                # and each airport, individually
-                for airport in self.file_profs[region]:
-                    if airport not in self.temp_profs[d_str][region]:
-                        self.temp_profs[d_str][region][airport] = {}
-                    for eic in [-1] + self.eics:
-                        def_eic = eic if eic in self.file_profs[region][airport] else self.DEFAULT
-                        # check if default has already been included
-                        if def_eic not in self.temp_profs[d_str][region][airport]:
-                            self.temp_profs[d_str][region][airport][def_eic] = {}
-                        else:
-                            continue
 
-                        file_region = self.file_profs[region]
+            self.temp_profs[d_str] = {}
+            # and each airport, individually
+            for airport in self.file_profs:
+                if airport not in self.temp_profs[d_str]:
+                    self.temp_profs[d_str][airport] = {}
+                for eic in [-1] + self.eics:
+                    def_eic = eic if eic in self.file_profs[airport] else self.DEFAULT
+                    # check if default has already been included
+                    if def_eic not in self.temp_profs[d_str][airport]:
+                        self.temp_profs[d_str][airport][def_eic] = {}
+                    else:
+                        continue
 
-                        # monthly scaling factor
+                    # monthly scaling factor
+                    try:
+                        factor_month = self.file_profs[airport][def_eic]['monthly'][month]
+                    except:
                         try:
-                            factor_month = file_region[airport][def_eic]['monthly'][month]
+                            factor_month = self.file_profs[self.DEFAULT][def_eic]['monthly'][month]
                         except:
-                            try:
-                                factor_month = file_region[self.DEFAULT][def_eic]['monthly'][month]
-                            except:
-                                factor_month = file_region[self.DEFAULT][self.DEFAULT]['monthly'][month]
+                            factor_month = self.file_profs[self.DEFAULT][self.DEFAULT]['monthly'][month]
 
-                        # dow scaling factor
+                    # dow scaling factor
+                    try:
+                        factor_dow = self.file_profs[airport][def_eic]['weekly'][dow]
+                    except:
                         try:
-                            factor_dow = file_region[airport][def_eic]['weekly'][dow]
+                            factor_dow = self.file_profs[self.DEFAULT][def_eic]['weekly'][dow]
                         except:
-                            try:
-                                factor_dow = file_region[self.DEFAULT][def_eic]['weekly'][dow]
-                            except:
-                                factor_dow = file_region[self.DEFAULT][self.DEFAULT]['weekly'][dow]
+                            factor_dow = self.file_profs[self.DEFAULT][self.DEFAULT]['weekly'][dow]
 
-                        # 24-hr diurnal scaling factors
-                        diurn = 'diurnal_weekday' if dow < 5 else 'diurnal_weekend'
+                    # 24-hr diurnal scaling factors
+                    diurn = 'diurnal_weekday' if dow < 5 else 'diurnal_weekend'
 
+                    try:
+                        factors_diurnal = self.file_profs[airport][def_eic][diurn]
+                    except:
                         try:
-                            factors_diurnal = file_region[airport][def_eic][diurn]
+                            factors_diurnal = self.file_profs[self.DEFAULT][def_eic][diurn]
                         except:
-                            try:
-                                factors_diurnal = file_region[self.DEFAULT][def_eic][diurn]
-                            except:
-                                factors_diurnal = file_region[self.DEFAULT][self.DEFAULT][diurn]
+                            factors_diurnal = self.file_profs[self.DEFAULT][self.DEFAULT][diurn]
 
-                        # combine scaling factors to a resultant 24-hr cycle
-                        self.temp_profs[d_str][region][airport][def_eic] = [f * factor_month * factor_dow for f in factors_diurnal]
+                    # combine scaling factors to a resultant 24-hr cycle
+                    self.temp_profs[d_str][airport][def_eic] = [f * factor_month * factor_dow for f in factors_diurnal]
 
         return self.temp_profs
 
@@ -515,12 +501,12 @@ class TemporalSurrogateBuilder(object):
             NOTE: It is up to the creator of this file to ensure either:
             a) a full set of data, or
             b) a full set of data defaults
-            region,airport,eic,type,fractions|
-            default,default,default,monthly,0.962509|0.974175|0.989383|0.994767|...
-            default,default,default,weekly,1.03601|1.017904|1.025875|1.015781|...
+            airport,eic,type,fractions|
+            default,default,monthly,0.962509|0.974175|0.989383|0.994767|...
+            default,default,weekly,1.03601|1.017904|1.025875|1.015781|...
         '''
         # rearrange file above into usable data, taking care of defaults appropriately
-        profiles = dict((r, {}) for r in self.regions)
+        profiles = {}
 
         default = 'default'
         sep = '|'
@@ -534,72 +520,57 @@ class TemporalSurrogateBuilder(object):
 
         # parse all lines in file into dict
         lines = [line.rstrip().split(',') for line in f.xreadlines()]
-        lines = filter(lambda l: len(l) > 4, lines)
-        data = dict((tuple(line[:4]), [float(v) for v in line[-1].split(sep)]) for line in lines)
+        lines = filter(lambda l: len(l) > 3, lines)
+        data = dict((tuple(line[:3]), [float(v) for v in line[-1].split(sep)]) for line in lines)
 
         # ignore the case: default type
         for key in list(data.keys()):
-            if key[3] == default:
+            if key[2] == default:
                 print('\t\tERROR: Temporal profiles can not have a default type')
                 del data[key]
 
         # handle the case: full-default profiles
         for typ in ['monthly', 'weekly', 'diurnal_weekday', 'diurnal_weekend']:
-            default_key = (default, default, default, typ)
+            default_key = (default, default, typ)
             if default_key in data:
-                for region in self.regions:
-                    if self.DEFAULT not in profiles[region]:  # default airport
-                        profiles[region][self.DEFAULT] = {}
-                    if self.DEFAULT not in profiles[region][self.DEFAULT]:  # default EIC
-                        profiles[region][self.DEFAULT][self.DEFAULT] = {}
-                    profiles[region][self.DEFAULT][self.DEFAULT][typ] = data[default_key]
+                if self.DEFAULT not in profiles:  # default airport
+                    profiles[self.DEFAULT] = {}
+                if self.DEFAULT not in profiles[self.DEFAULT]:  # default EIC
+                    profiles[self.DEFAULT][self.DEFAULT] = {}
+                profiles[self.DEFAULT][self.DEFAULT][typ] = data[default_key]
                 del data[default_key]
             else:
                 raise ValueError("Default temporal profile missing: " + str(default_key))
 
-        # ignore the case: default-region but specific airport
+        # handle the case: default airport, but not EIC
         for key in list(data.keys()):
             if key[0] == default and key[1] != default:
-                raise Warning('Temporal profiles can not have default region without default airport')
+                if self.DEFAULT not in profiles:
+                    profiles[self.DEFAULT] = {}
+                if key[1] not in profiles[self.DEFAULT]:
+                    profiles[self.DEFAULT][int(key[1])] = {}
+                profiles[self.DEFAULT][int(key[1])][key[2]] = data[key]
                 del data[key]
 
-        # handle the case: default all-but-EIC
+        # handle the case: default EIC, but not airport
         for key in list(data.keys()):
-            if key[0] == default and key[1] == default and key[2] != default:
-                for region in self.regions:
-                    if key[2] not in profiles[region][self.DEFAULT]:
-                        profiles[region][self.DEFAULT][key[2]] = {}
-                    profiles[region][self.DEFAULT][key[2]][key[3]] =  data[key]
+            if key[0] != default and key[1] == default:
+                if key[0] not in profiles:
+                    profiles[key[0]] = {}
+                if self.DEFAULT not in profiles[key[0]]:
+                    profiles[key[0]][self.DEFAULT] = {}
+                profiles[key[0]][self.DEFAULT][key[2]] = data[key]
                 del data[key]
 
-        # ignore aiports: with specific region that is not part of this run
-        for key in list(data.keys()):
-            if int(key[0]) not in self.regions:
-                del data[key]
-
-        # handle the case: specific region, default EIC
-        for key in list(data.keys()):
-            if key[0] != default and key[2] == default:
-                region = int(key[0])
-                airport_code = self.DEFAULT if key[1] == default else key[1]
-                if airport_code not in profiles[region]:
-                    profiles[region][airport_code] = {}
-                for eic in self.eics:
-                    if eic not in profiles[region][airport_code]:
-                        profiles[region][airport_code][eic] = {}
-                    profiles[region][airport_code][eic][key[3]] = data[key]
-                del data[key]
-
-        # handle the case: specific region and EIC (all that is left)
+        # handle the case: specific airport and EIC (all that is left)
         for key in data:
-            region = int(key[0])
-            airport = self.DEFAULT if key[1] == default else key[1]
-            eic = int(key[2])
-            if airport not in profiles[region]:
-                profiles[region][airport] = {}
-            if eic not in profiles[region][airport]:
-                profiles[region][airport][eic] = {}
-            profiles[region][airport][eic][key[3]] = data[key]
+            airport = key[0]
+            eic = int(key[1])
+            if airport not in profiles:
+                profiles[airport] = {}
+            if eic not in profiles[airport]:
+                profiles[airport][eic] = {}
+            profiles[airport][eic][key[2]] = data[key]
 
         return profiles
 
@@ -701,7 +672,7 @@ class SpatialSurrogateBuilder(object):
                     self.add_dict(surr, toff1)
                     # add to final spatial surrogate collection
                     self.surrogates[region][airport][eic][poll] = surr
-                    
+
     @staticmethod
     def add_dict(orig, new):
         ''' sum the element in two flat dictionaries
@@ -1106,7 +1077,7 @@ class SpatialSurrogateBuilder(object):
                 airports[region][airport] = {'flights': 0, 'runways': []}
             airports[region][airport]['flights'] += flights
             airports[region][airport]['runways'].append((land_lat, land_lon, take_lat, take_lon))
-           
+
         return airports
 
 
@@ -1142,7 +1113,7 @@ class EmissionsScaler(object):
             for airport, airport_emis in region_emis.iteritems():
                 surrs = spat_surrs[region][airport]
 
-                diurnal_by_eic = temporal[region][airport] if airport in temporal[region] else temporal[region][self.DEFAULT]
+                diurnal_by_eic = temporal[airport] if airport in temporal else temporal[self.DEFAULT]
                 for eic, polls in airport_emis.iteritems():
                     diurnal = diurnal_by_eic[eic] if eic in diurnal_by_eic else diurnal_by_eic[self.DEFAULT]
                     if eic not in scaled_emis:
