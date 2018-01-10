@@ -314,7 +314,7 @@ class EmissionsReader(object):
         '''
         f = open(file_path, 'r')
 
-        for line in f.xreadlines():
+        for line in f.readlines():
             if line.startswith('#'): continue
             ln = line.split(',')
             if len(ln) < 10: continue
@@ -342,19 +342,19 @@ class EmissionsReader(object):
         ''' split area source aircraft emissions from regional to airport-specific
             using the number of flights at each airport
         '''
-        for region, eic_emis in area_emis.iteritems():
+        for region, eic_emis in area_emis.items():
             if region not in self.airports: continue
             if region not in self.airport_emis:
                 self.airport_emis[region] = {}
-            total_flights = float(sum([a['flights'] for a in self.airports[region].itervalues()]))
+            total_flights = float(sum([a['flights'] for a in self.airports[region].values()]))
 
-            for airport, airport_data in self.airports[region].iteritems():
+            for airport, airport_data in self.airports[region].items():
                 if airport not in self.airport_emis[region]:
                     self.airport_emis[region][airport] = {}
                 fraction = self.airports[region][airport]['flights'] / total_flights
 
-                for eic, poll_emis in eic_emis.iteritems():
-                    for poll, emis in poll_emis.iteritems():
+                for eic, poll_emis in eic_emis.items():
+                    for poll, emis in poll_emis.items():
                         if eic not in self.airport_emis[region][airport]:
                             self.airport_emis[region][airport][eic] = {}
                         if poll not in self.airport_emis[region][airport][eic]:
@@ -386,7 +386,7 @@ class EmissionsReader(object):
         f = open(file_path, 'r')
         facs_not_found = set()
 
-        for line in f.xreadlines():
+        for line in f.readlines():
             if line.startswith('#'): continue
             ln = line.split(',')
             if len(ln) < 14: continue
@@ -519,7 +519,7 @@ class TemporalSurrogateBuilder(object):
             sep = last_col[-1]
 
         # parse all lines in file into dict
-        lines = [line.rstrip().split(',') for line in f.xreadlines()]
+        lines = [line.rstrip().split(',') for line in f.readlines()]
         lines = filter(lambda l: len(l) > 3, lines)
         data = dict((tuple(line[:3]), [float(v) for v in line[-1].split(sep)]) for line in lines)
 
@@ -614,7 +614,7 @@ class SpatialSurrogateBuilder(object):
             if region not in self.airports:
                 print('\t\tNo airports given for region #' + str(region) + '. Skipping.')
                 continue
-            for location, location_data in self.airports[region].iteritems():
+            for location, location_data in self.airports[region].items():
                 if location not in self.surrogates[region]:
                     self.surrogates[region][location] = {}
 
@@ -655,10 +655,10 @@ class SpatialSurrogateBuilder(object):
                 taxi = {cell0: 1.0}
 
             # fill surrogates by eic and pollutant
-            for eic, poll_fracts in self.flight_fracts.iteritems():
+            for eic, poll_fracts in self.flight_fracts.items():
                 if eic not in self.surrogates[region][airport]:
                     self.surrogates[region][airport][eic] = {}
-                for poll, fractions in poll_fracts.iteritems():
+                for poll, fractions in poll_fracts.items():
                     # copy surrogates, so they can be reused
                     surr = land.copy()
                     taxi1 = taxi.copy()
@@ -794,7 +794,7 @@ class SpatialSurrogateBuilder(object):
         lay in.
         '''
         z = 0
-        layers = [self.zf[i][y][x] for i in xrange(len(self.zf))]
+        layers = [self.zf[i][y][x] for i in range(len(self.zf))]
         for i, layer in enumerate(layers):
             if layer > z_meters:
                 z = i
@@ -836,7 +836,7 @@ class SpatialSurrogateBuilder(object):
         # find vertical grid cell
         z = 0
         if p[0] > 0:
-            layers = [self.zf[i][y][x] for i in xrange(len(self.zf))]
+            layers = [self.zf[i][y][x] for i in range(len(self.zf))]
             for i, layer in enumerate(layers):
                 if layer > p[0]:
                     z = i
@@ -873,11 +873,11 @@ class SpatialSurrogateBuilder(object):
         lon_vals = self.lon_dot[:] * self.RAD_FACTOR
 
         kdtrees = {}
-        for region in self.surrogates.iterkeys():
+        for region in self.surrogates.keys():
             # find the grid cell bounding box for the region in question
             lat_min, lat_max = self.region_boxes[region]['lat']
             lon_min, lon_max = self.region_boxes[region]['lon']
-
+ 
             # slice grid down to this region
             latvals = lat_vals[lat_min:lat_max, lon_min:lon_max]
             lonvals = lon_vals[lat_min:lat_max, lon_min:lon_max]
@@ -1012,7 +1012,7 @@ class SpatialSurrogateBuilder(object):
 
         # read file line-by-line
         fracts = {}
-        for line in f.xreadlines():
+        for line in f.readlines():
             # parse line
             ln = line.rstrip().split(',')
             if len(ln) < 5: continue
@@ -1058,7 +1058,7 @@ class SpatialSurrogateBuilder(object):
         takelon_col = header.index('takeoff_lon') if 'takeoff_lon' in header else 7
 
         # read file, line by line
-        for line in f.xreadlines():
+        for line in f.readlines():
             # parse line
             ln = line.rstrip().split(',')
             if len(ln) < 7: continue
@@ -1106,27 +1106,27 @@ class EmissionsScaler(object):
         daily_emis = {}
         temporal = temp_surrs[date]
 
-        for region, region_emis in emis.iteritems():
+        for region, region_emis in emis.items():
             if region not in daily_emis:
                 daily_emis[region] = {}
 
-            for airport, airport_emis in region_emis.iteritems():
+            for airport, airport_emis in region_emis.items():
                 surrs = spat_surrs[region][airport]
 
                 diurnal_by_eic = temporal[airport] if airport in temporal else temporal[self.DEFAULT]
-                for eic, polls in airport_emis.iteritems():
+                for eic, polls in airport_emis.items():
                     diurnal = diurnal_by_eic[eic] if eic in diurnal_by_eic else diurnal_by_eic[self.DEFAULT]
                     if eic not in scaled_emis:
                         scaled_emis[eic] = dict((hr, {}) for hr in range(24))
                     if eic not in daily_emis[region]:
                         daily_emis[region][eic] = {}
 
-                    for hr in xrange(24):
+                    for hr in range(24):
                         fraction_hr = diurnal[hr]
                         if fraction_hr == 0.0:
                             continue
 
-                        for poll, val in polls.iteritems():
+                        for poll, val in polls.items():
                             if poll not in scaled_emis[eic][hr]:
                                 scaled_emis[eic][hr][poll] = {}
                             if poll not in daily_emis[region][eic]:
@@ -1134,7 +1134,7 @@ class EmissionsScaler(object):
                             val0 = val * fraction_hr
                             daily_emis[region][eic][poll] += val0
 
-                            for cell, fraction_cell in surrs[eic][poll].iteritems():
+                            for cell, fraction_cell in surrs[eic][poll].items():
                                 if cell not in scaled_emis[eic][hr][poll]:
                                     scaled_emis[eic][hr][poll][cell] = 0.0
                                 scaled_emis[eic][hr][poll][cell] += val0 * fraction_cell
@@ -1253,7 +1253,7 @@ class DictToNcfWriter(object):
         # find species position by pollutant
         species = {}
         for group in self.groups:
-            for i in xrange(len(np.atleast_1d(self.groups[group]['species']))):
+            for i in range(len(np.atleast_1d(self.groups[group]['species']))):
                 species[self.groups[group]['species'][i]] = {'group': group, 'index': i}
 
         # some mass fractions are not EIC dependent
@@ -1262,7 +1262,7 @@ class DictToNcfWriter(object):
 
         dropped_eics = set()
 
-        for hour in xrange(24):
+        for hour in range(24):
             # adjust hr for DST
             if gmt_shift == '19':
                 hr = (hour + 1) % 24
@@ -1277,7 +1277,7 @@ class DictToNcfWriter(object):
                     # build default emissions grid, for the sum of all EICs
                     grid = np.zeros((self.nlayers, self.nrows, self.ncols), dtype=np.float32)
 
-                    for eic, eic_data in scaled_emissions.iteritems():
+                    for eic, eic_data in scaled_emissions.items():
                         if poll not in eic_data[hour]: continue
 
                         # species fractions
@@ -1334,8 +1334,8 @@ class DictToNcfWriter(object):
         fout.write('Region,EIC,Pollutant,' + ','.join(polls) + ' (tons/day)\n')
 
         # write totals totals
-        for region, region_data in daily_emis.iteritems():
-            for eic, eic_data in region_data.iteritems():
+        for region, region_data in daily_emis.items():
+            for eic, eic_data in region_data.items():
                 line = str(region) + ',' + str(eic)
                 for poll in polls:
                     line += ','
@@ -1354,7 +1354,7 @@ class DictToNcfWriter(object):
         # find species position by pollutant
         species = {}
         for group in self.groups:
-            for i in xrange(len(np.atleast_1d(self.groups[group]['species']))):
+            for i in range(len(np.atleast_1d(self.groups[group]['species']))):
                 species[self.groups[group]['species'][i]] = {'group': group, 'index': i}
         no2_ind = np.where(self.groups['NOX']['species']=='NO2')[0][0]
         so2_ind = np.where(self.groups['SOX']['species']=='SO2')[0][0]
@@ -1367,19 +1367,19 @@ class DictToNcfWriter(object):
 
         # create input pollutant totals
         in_totals = {}
-        for airport_emis in emis.itervalues():
-            for eic_emis in airport_emis.itervalues():
-                for poll_emis in eic_emis.itervalues():
-                    for poll, value in poll_emis.iteritems():
+        for airport_emis in emis.values():
+            for eic_emis in airport_emis.values():
+                for poll_emis in eic_emis.values():
+                    for poll, value in poll_emis.items():
                         if poll not in in_totals:
                             in_totals[poll] = 0.0
                         in_totals[poll] += value
 
         # create scaled emissions totals
         scaled_totals = {}
-        for region_emis in daily_emis.itervalues():
-            for eic_emis in region_emis.itervalues():
-                for poll, value in eic_emis.iteritems():
+        for region_emis in daily_emis.values():
+            for eic_emis in region_emis.values():
+                for poll, value in eic_emis.items():
                     if poll not in scaled_totals:
                         scaled_totals[poll] = 0.0
                     scaled_totals[poll] += value
@@ -1411,7 +1411,7 @@ class DictToNcfWriter(object):
         ''' Given a dictionary of (layer, row, col) -> float,
             create a 3D grid to store the emissions.
         '''
-        for (z, x, y), value in grid_cells.iteritems():
+        for (z, x, y), value in grid_cells.items():
             grid[(z, y, x)] += value * fraction
 
     def _create_netcdf(self, out_path, d, jdate):
@@ -1491,7 +1491,7 @@ class DictToNcfWriter(object):
 
         # build TFLAG variable
         tflag = np.ones((25, self.num_species, 2), dtype=np.int32)
-        for hr in xrange(25):
+        for hr in range(25):
             gdh = time.strftime("%Y%j %H0000", time.gmtime(secs + hr * 60 * 60))
             a_date,ghr = map(int, gdh.split())
             tflag[hr,:,0] = tflag[hr,:,0] * a_date
@@ -1514,7 +1514,7 @@ class DictToNcfWriter(object):
         self.gsref = {}
 
         f = open(self.gsref_file, 'r')
-        for line in f.xreadlines():
+        for line in f.readlines():
             ln = line.rstrip().split(',')
             if len(ln) != 3:
                 continue
@@ -1565,7 +1565,7 @@ class DictToNcfWriter(object):
 
         # convert weight list to numpy.array
         for grp in self.groups:
-            self.groups[grp]['species'] = np.array(self.groups[grp]['species'], dtype=np.dtype('a8'))
+            self.groups[grp]['species'] = np.array(self.groups[grp]['species'], dtype=np.dtype(str))
             self.groups[grp]['weights'] = np.array(self.groups[grp]['weights'], dtype=np.float32)
 
         # calculate the number of species total
@@ -1583,7 +1583,7 @@ class DictToNcfWriter(object):
         self.gspro = {}
 
         f = open(self.gspro_file, 'r')
-        for line in f.xreadlines():
+        for line in f.readlines():
             # parse line
             ln = line.rstrip().split(',')
             profile = ln[0].upper()
@@ -1597,12 +1597,12 @@ class DictToNcfWriter(object):
                 poll_index = list(self.groups[group]['species']).index(pollutant)
             except ValueError:
                 # we don't care about that pollutant
-                pass
+                pass 
             # start filling output dict
             if profile not in self.gspro:
                 self.gspro[profile] = {}
             if group not in self.gspro[profile]:
-                self.gspro[profile][group] = np.zeros(len(self.groups[group]['species']),
+                self.gspro[profile][group] = np.zeros(len(self.groups[group]['species']), 
                                                       dtype=np.float32)
             self.gspro[profile][group][poll_index] = np.float32(ln[5])
 
@@ -1611,6 +1611,7 @@ class DictToNcfWriter(object):
                 self.gspro[profile][group][poll_index] = np.float32(ln[3])
 
         f.close()
+
 
     def _build_custom_file_path(self, date):
         """ Build output file directory and path for a daily, multi-region NetCDF file.
