@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+import sys
+if sys.version_info.major != 3:
+    sys.exit('ERROR: This script must be run using Python v3.')
 from datetime import datetime, timedelta
 import multiprocessing
 from numpy import arcsin, array, cos, isnan, pi, radians, sin, sqrt, tan
@@ -6,7 +9,6 @@ import numpy as np
 from netCDF4 import Dataset
 import os
 from scipy.spatial import cKDTree
-import sys
 import time
 
 # USER CONFIGURABLES
