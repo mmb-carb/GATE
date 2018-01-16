@@ -154,7 +154,7 @@ Report bugs to <https://github.com/mmb-carb/GATE/issues>.
 
 class GATE(object):
 
-    GATE_VERSION = '0.3.1'
+    GATE_VERSION = '0.3.2'
 
     def __init__(self, config):
         ''' build  each step of the model '''
@@ -277,6 +277,7 @@ class EmissionsReader(object):
         self.point_files = config['POINT_FILES']
         cats = eval(open(config['CATEGORIES_FILE']).read())
         self.eics = cats['eics']
+        self.comjets = cats['commercial_jets']
         self.scc2eic = cats['scc2eic']
         self.regions = config['REGIONS']
         rsf = config['REGION_STRINGS_FILE']
@@ -348,14 +349,22 @@ class EmissionsReader(object):
             if region not in self.airports: continue
             if region not in self.airport_emis:
                 self.airport_emis[region] = {}
-            total_flights = float(sum([a['flights'] for a in self.airports[region].values()]))
+
+            # total flights for this county
+            total_comjet = float(sum([a['flights_comjet'] for a in self.airports[region].values()]))
+            total_other = float(sum([a['flights_other'] for a in self.airports[region].values()]))
 
             for airport, airport_data in self.airports[region].items():
+                # build flight fractions for this airport
+                fraction_comjet = self.airports[region][airport]['flights_comjet'] / total_comjet
+                fraction_other = self.airports[region][airport]['flights_other'] / total_other
+
+                # split off emissions for just this airport
                 if airport not in self.airport_emis[region]:
                     self.airport_emis[region][airport] = {}
-                fraction = self.airports[region][airport]['flights'] / total_flights
 
                 for eic, poll_emis in eic_emis.items():
+                    fraction = fraction_comjet if eic in self.comjets else fraction_other
                     for poll, emis in poll_emis.items():
                         if eic not in self.airport_emis[region][airport]:
                             self.airport_emis[region][airport][eic] = {}
@@ -879,7 +888,7 @@ class SpatialSurrogateBuilder(object):
             # find the grid cell bounding box for the region in question
             lat_min, lat_max = self.region_boxes[region]['lat']
             lon_min, lon_max = self.region_boxes[region]['lon']
- 
+
             # slice grid down to this region
             latvals = lat_vals[lat_min:lat_max, lon_min:lon_max]
             lonvals = lon_vals[lat_min:lat_max, lon_min:lon_max]
@@ -1042,9 +1051,9 @@ class SpatialSurrogateBuilder(object):
         ''' Read custom runways file,
             to build a dictionary of all runways by region
             File Format:
-            airport,region,runway,flights,land_lat,land_lon,takeoff_lat,takeoff_lon
-            LAX,59,06L/24R,158967.0,33.9491124722,-118.431159861,33.9521039167,-118.401948917
-            LAX,59,06R/24L,158967.0,33.9467474722,-118.435327222,33.9501944444,-118.401668667
+            airport,region,runway,flights_comjet,flights_other,land_lat,land_lon,takeoff_lat,takeoff_lon
+            LAX,59,06R/24L,142069,16996,33.9467474722,-118.435327222,33.9501944444,-118.401668667
+            LAX,59,07L/25R,142069,16996,33.9358305833,-118.41934175,33.9398771944,-118.379776944
         '''
         airports = {}
         f = open(file_path, 'r')
@@ -1053,11 +1062,12 @@ class SpatialSurrogateBuilder(object):
         header = f.readline().rstrip().lower().split(',')
         airport_col = header.index('airport') if 'airport' in header else 0
         regions_col = header.index('region') if 'region' in header else 1
-        flights_col = header.index('flights') if 'flights' in header else 3
-        landlat_col = header.index('land_lat') if 'land_lat' in header else 4
-        landlon_col = header.index('land_lon') if 'land_lon' in header else 5
-        takelat_col = header.index('takeoff_lat') if 'takeoff_lat' in header else 6
-        takelon_col = header.index('takeoff_lon') if 'takeoff_lon' in header else 7
+        flights_comjet_col = header.index('flights_comjet') if 'flights_comjet' in header else 3
+        flights_other_col = header.index('flights_other') if 'flights_other' in header else 4
+        landlat_col = header.index('land_lat') if 'land_lat' in header else 5
+        landlon_col = header.index('land_lon') if 'land_lon' in header else 6
+        takelat_col = header.index('takeoff_lat') if 'takeoff_lat' in header else 7
+        takelon_col = header.index('takeoff_lon') if 'takeoff_lon' in header else 8
 
         # read file, line by line
         for line in f.readlines():
@@ -1066,18 +1076,26 @@ class SpatialSurrogateBuilder(object):
             if len(ln) < 7: continue
             airport = ln[airport_col]
             region = int(ln[regions_col])
-            flights = int(float(ln[flights_col]))
+            flights_comjet = int(float(ln[flights_comjet_col]))
+            flights_other = int(float(ln[flights_other_col]))
             land_lat = float(ln[landlat_col])
             land_lon = float(ln[landlon_col])
             take_lat = float(ln[takelat_col])
             take_lon = float(ln[takelon_col])
 
+            # simplify the logic matching flight numbers to emission inventories
+            if flights_comjet <= 0:
+                flights_comjet = 1
+            if flights_other <= 0:
+                flights_other = 1
+
             # fill output dict
             if region not in airports:
                 airports[region] = {}
             if airport not in airports[region]:
-                airports[region][airport] = {'flights': 0, 'runways': []}
-            airports[region][airport]['flights'] += flights
+                airports[region][airport] = {'flights_comjet': 0, 'flights_other': 0, 'runways': []}
+            airports[region][airport]['flights_comjet'] += flights_comjet
+            airports[region][airport]['flights_other'] += flights_other
             airports[region][airport]['runways'].append((land_lat, land_lon, take_lat, take_lon))
 
         return airports
@@ -1599,12 +1617,12 @@ class DictToNcfWriter(object):
                 poll_index = list(self.groups[group]['species']).index(pollutant)
             except ValueError:
                 # we don't care about that pollutant
-                pass 
+                pass
             # start filling output dict
             if profile not in self.gspro:
                 self.gspro[profile] = {}
             if group not in self.gspro[profile]:
-                self.gspro[profile][group] = np.zeros(len(self.groups[group]['species']), 
+                self.gspro[profile][group] = np.zeros(len(self.groups[group]['species']),
                                                       dtype=np.float32)
             self.gspro[profile][group][poll_index] = np.float32(ln[5])
 
