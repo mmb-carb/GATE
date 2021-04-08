@@ -40,7 +40,7 @@ POINT_FILES = ['input/emis/example_point_aircraft_ca_2012.ff10']
 REGION_STRINGS_FILE = 'input/default/region_strings_AB_FIPS_DIS.csv'
 FACILITY_ID_FILE = 'input/default/facility_ids.csv'
 ## TEMPORAL INFO
-TEMPORAL_FILE = 'input/temporal/aircraft_temporal_profiles_2002-2015_BTS_20161220.csv'
+TEMPORAL_FILE = 'input/temporal/bts_2015_2019_airport_temporal_frac_statewide_rev1.csv'
 ## OUTPUT INFO
 VERSION = 'v0100'
 GSPRO_FILE = 'input/ncf/gspro.cmaq.saprc.31dec2015.all.csv'
