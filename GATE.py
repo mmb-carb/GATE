@@ -10,15 +10,23 @@ from netCDF4 import Dataset
 import os
 from scipy.spatial import cKDTree
 import time
+import calendar
 
 # USER CONFIGURABLES
 ## RUN INFO
-DATES = ['2012-07-18', '...', '2012-07-24']
+DATES = ['2018-01-01', '...', '2018-12-31']
 DATE_FORMAT = '%Y-%m-%d'
 THREE_DAY_MONTH = False
-BASE_YEAR = 2012
-REGIONS = range(1, 118)
-NUM_PROCS = 2
+SEVEN_DAY_MONTH = False
+BASE_YEAR = 2018
+if calendar.isleap(BASE_YEAR):
+    total_days = 366
+else:
+    total_days = 365
+
+REGIONS = range(1, 89)
+#REGIONS = range(31, 32)
+NUM_PROCS = 16
 ## GRID INFO
 GRID_DOT_FILE = 'input/grid/GRIDDOT2D.Cali_4km_321x291'
 MET_ZF_FILE = 'input/grid/METCRO3D.Cali_4km_321x291_2012_01_ZF_AVG'
@@ -67,7 +75,7 @@ def main():
               'TEMPORAL_FILE': TEMPORAL_FILE, 'REGION_STRINGS_FILE': REGION_STRINGS_FILE,
               'VERSION': VERSION, 'GSPRO_FILE': GSPRO_FILE, 'GSREF_FILE': GSREF_FILE,
               'WEIGHT_FILE': WEIGHT_FILE, 'OUT_DIR': OUT_DIR, 'SHOULD_ZIP': SHOULD_ZIP,
-              'PRINT_TOTALS': PRINT_TOTALS}
+              'PRINT_TOTALS': PRINT_TOTALS, 'SEVEN_DAY_MONTH': SEVEN_DAY_MONTH}
 
     # parse command-line
     a = 1
@@ -114,6 +122,7 @@ Optional Arguments:
   -DATES                dates to model aircraft emissions
   -DATE_FORMAT          Python datetime format string for the above
   -THREE_DAY_MONTH      True if each month can be represented by 3 days
+  -SEVEN_DAY_MONTH      True if each month can be represented by 7 days
   -BASE_YEAR            base year
   -REGIONS              numerical region list
   -NUM_PROCS            number of parallel processes to run (1 per day)
@@ -154,7 +163,7 @@ Report bugs to <https://github.com/mmb-carb/GATE/issues>.
 
 class GATE(object):
 
-    GATE_VERSION = '0.3.2'
+    GATE_VERSION = '0.3.3'
 
     def __init__(self, config):
         ''' build  each step of the model '''
@@ -196,8 +205,9 @@ class GATE(object):
     def _parse_dates(self, config):
         ''' Allow for implicit data ranges by using ellipsis:
             DATES = ['2000-01-01', '...', '2000-12-31']
-            Optional: If THREE_DAY_MONTH == True, the user want to only run for 3 days in each
-                month. And we pick the second Wed, Sat, and Sunday.
+            Optional: If THREE_DAY_MONTH, the user wants to run for 3 days in each month.
+                      And we pick the second Wed, Sat, and Sunday.
+            Optional: If SEVEN_DAY_MONTH, the user wants to run for 7 days in each month.
         '''
         fmt = config['DATE_FORMAT']
 
@@ -223,7 +233,7 @@ class GATE(object):
             raise ValueError('You may only run this model for one year at a time.')
 
         # handle the case where the user wants 3 representative days/month
-        if not config['THREE_DAY_MONTH']:
+        if not config['THREE_DAY_MONTH'] and not config['SEVEN_DAY_MONTH']:
             return
 
         # find start and end dates of period
@@ -231,14 +241,23 @@ class GATE(object):
         end = datetime.strptime(config['DATES'][-1], fmt)
 
         # generate new dates for the 3-representative days-per-month case
-        dates = []
-        yr = start.year
-        months = sorted(range(start.month, end.month + 1))
-        for month in months:
-            current = datetime(start.year, month, 1)
-            dates.append(datetime.strftime(self._nth_weekday(current, 2, 2), fmt))  # Wednesday
-            dates.append(datetime.strftime(self._nth_weekday(current, 2, 5), fmt))  # Saturday
-            dates.append(datetime.strftime(self._nth_weekday(current, 2, 6), fmt))  # Sunday
+        if config['THREE_DAY_MONTH']:
+            dates = []
+            yr = start.year
+            months = sorted(range(start.month, end.month + 1))
+            for month in months:
+                current = datetime(start.year, month, 1)
+                dates.append(datetime.strftime(self._nth_weekday(current, 2, 2), fmt))  # Wednesday
+                dates.append(datetime.strftime(self._nth_weekday(current, 2, 5), fmt))  # Saturday
+                dates.append(datetime.strftime(self._nth_weekday(current, 2, 6), fmt))  # Sunday
+        else:  # generate new dates for 7-representative days-per-month case
+            dates = []
+            yr = start.year
+            months = sorted(range(start.month, end.month + 1))
+            for month in months:
+                current = datetime(start.year, month, 1)
+                for iday in range(7):
+                    dates.append(datetime.strftime(self._nth_weekday(current, 2, iday), fmt))
 
         # sort date strings
         config['DATES'] = sorted(dates)
@@ -1647,7 +1666,11 @@ class DictToNcfWriter(object):
         # create output dir, if necessary
         out_dir = os.path.join(self.directory, 'ncf')
         if not os.path.exists(out_dir):
-            os.makedirs(out_dir)
+            try:
+                os.makedirs(out_dir)
+            except:
+                if not os.path.exists(out_dir):
+                    raise
 
         # define the grid size string
         grid_size = '4k'
