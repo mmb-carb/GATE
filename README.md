@@ -1,4 +1,4 @@
-# GATE Model - beta
+# GATE Model
 
 > Gridded Aircraft Trajectory Emissions Model
 
